@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { chat, resetChatSession } from '../api'
-import { MessageOutlined, SendOutlined, HomeOutlined, RobotOutlined, UserOutlined, FileTextOutlined, DollarOutlined, ContactsOutlined, WarningOutlined, ThunderboltOutlined, ReloadOutlined } from '@ant-design/icons'
+import { MessageOutlined, SendOutlined, HomeOutlined, RobotOutlined, UserOutlined, FileTextOutlined, DollarOutlined, ContactsOutlined, WarningOutlined, ThunderboltOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons'
 import { Input, Button, Card, Tag, Spin } from 'antd'
 import SmartSuggestions from '../components/SmartSuggestions'
 
@@ -44,6 +44,11 @@ const SUGGESTIONS: Suggestion[] = [
   // Cảnh báo
   { text: 'Cảnh báo lừa đảo mới', icon: <WarningOutlined />, category: 'Cảnh báo', color: '#fa8c16' },
   { text: 'Thủ đoạn scam hiện tại', icon: <WarningOutlined />, category: 'Cảnh báo', color: '#fa8c16' },
+  
+  // Tài liệu pháp lý
+  { text: 'Xem Điều 5 Thông tư 02', icon: <FileTextOutlined />, category: 'Tài liệu pháp lý', color: '#d46b08' },
+  { text: 'Quyết định 69 quy định gì?', icon: <FileTextOutlined />, category: 'Tài liệu pháp lý', color: '#d46b08' },
+  { text: 'Điều khoản xử lý kỷ luật đảng viên', icon: <FileTextOutlined />, category: 'Tài liệu pháp lý', color: '#d46b08' },
 ]
 
 export default function Chat() {
@@ -184,6 +189,10 @@ export default function Chat() {
     } else if (intent === 'search_advisory' && results && results.length > 0) {
       suggestions.push('Còn cảnh báo nào khác không?')
       suggestions.push('Cách phòng tránh như thế nào?')
+    } else if (intent === 'search_legal' && results && results.length > 0) {
+      suggestions.push('Có điều khoản liên quan nào khác không?')
+      suggestions.push('Tải file gốc văn bản này?')
+      suggestions.push('Tóm tắt nội dung chính của điều này?')
     }
     
     return suggestions.slice(0, 3)
@@ -206,9 +215,12 @@ export default function Chat() {
   return (
     <>
       <nav className="nav">
-        <div className="container">
+        <div className="container" style={{display: 'flex', gap: 16}}>
           <Link to="/" style={{display: 'flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none'}}>
             <HomeOutlined /> <span>Trang chủ</span>
+          </Link>
+          <Link to="/legal-upload" style={{display: 'flex', alignItems: 'center', gap: 8, color: 'inherit', textDecoration: 'none'}}>
+            <UploadOutlined /> <span>Import tài liệu</span>
           </Link>
         </div>
       </nav>
@@ -305,36 +317,24 @@ export default function Chat() {
                                 result.data.fine_amount_formatted
                               )
                             : null
-                          
-                          return (
-                            <Link
-                              key={rIdx}
-                              to={getResultLink(result)}
-                              style={{
+                          const isLegal = result.type === 'legal'
+                          const cardStyles = {
                                 display: 'block',
                                 padding: 12,
                                 border: isBestMatch ? '2px solid #faad14' : '1px solid #e0e0e0',
                                 borderRadius: 8,
                                 textDecoration: 'none',
-                                color: 'inherit',
+                            color: 'inherit' as const,
                                 transition: 'all 0.2s',
                                 background: isBestMatch ? '#fffbf0' : '#fff',
                                 boxShadow: isBestMatch ? '0 2px 8px rgba(250, 173, 20, 0.15)' : 'none',
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = isBestMatch ? '#faad14' : 'var(--color-primary)'
-                                e.currentTarget.style.background = isBestMatch ? '#fffbf0' : '#f9f9f9'
-                                e.currentTarget.style.transform = 'translateX(4px)'
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = isBestMatch ? '#faad14' : '#e0e0e0'
-                                e.currentTarget.style.background = isBestMatch ? '#fffbf0' : '#fff'
-                                e.currentTarget.style.transform = 'translateX(0)'
-                              }}
-                            >
+                          }
+
+                          const cardContent = (
+                            <>
                               <div style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4}}>
                                 <div style={{fontWeight: 600, fontSize: 15, flex: 1}}>
-                                  {getResultTitle(result)}
+                                  {isLegal ? `${result.data.section_code || ''} ${result.data.section_title || ''}`.trim() || result.data.document_title : getResultTitle(result)}
                                 </div>
                                 {isBestMatch && (
                                   <Tag color="gold" style={{margin: 0, fontSize: 11}}>
@@ -347,15 +347,76 @@ export default function Chat() {
                                   Mức phạt: {fineAmount}
                                 </div>
                               )}
+                              {isLegal && (
+                                <div style={{fontSize: 13, color: '#555', marginBottom: 8, lineHeight: 1.5}}>
+                                  <div style={{fontWeight: 500}}>
+                                    Thuộc: {result.data.document_title} ({result.data.document_code})
+                                  </div>
+                                  <div style={{marginTop: 4}}>
+                                    {(result.data.excerpt || result.data.content)?.slice(0, 220)}{(result.data.excerpt || result.data.content)?.length > 220 ? '...' : ''}
+                                  </div>
+                                  {result.data.page_start && (
+                                    <div style={{marginTop: 4, fontSize: 12, color: '#8c8c8c'}}>
+                                      Trang: {result.data.page_start}{result.data.page_end && result.data.page_end !== result.data.page_start ? `-${result.data.page_end}` : ''}
+                                    </div>
+                                  )}
+                                  <div style={{display: 'flex', gap: 8, marginTop: 8}}>
+                                    {result.data.download_url && (
+                                      <a href={result.data.download_url} target="_blank" rel="noopener noreferrer" style={{fontSize: 12, color: '#d46b08'}}>
+                                        Xem/Tải file gốc
+                                      </a>
+                                    )}
+                                    {result.data.source_url && !result.data.download_url && (
+                                      <a href={result.data.source_url} target="_blank" rel="noopener noreferrer" style={{fontSize: 12, color: '#d46b08'}}>
+                                        Mở nguồn
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                               <Tag color={
                                 result.type === 'fine' ? 'blue' :
                                 result.type === 'procedure' ? 'purple' :
-                                result.type === 'office' ? 'green' : 'orange'
+                                result.type === 'office' ? 'green' :
+                                result.type === 'advisory' ? 'orange' :
+                                '#d46b08'
                               } style={{margin: 0}}>
                                 {result.type === 'fine' ? 'Mức phạt' :
                                  result.type === 'procedure' ? 'Thủ tục' :
-                                 result.type === 'office' ? 'Đơn vị' : 'Cảnh báo'}
+                                 result.type === 'office' ? 'Đơn vị' :
+                                 result.type === 'advisory' ? 'Cảnh báo' : 'Tài liệu pháp lý'}
                               </Tag>
+                            </>
+                          )
+
+                          if (isLegal) {
+                            return (
+                              <div
+                                key={rIdx}
+                                style={cardStyles}
+                              >
+                                {cardContent}
+                              </div>
+                            )
+                          }
+
+                          return (
+                            <Link
+                              key={rIdx}
+                              to={getResultLink(result)}
+                              style={cardStyles}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = isBestMatch ? '#faad14' : 'var(--color-primary)'
+                                e.currentTarget.style.background = isBestMatch ? '#fffbf0' : '#f9f9f9'
+                                e.currentTarget.style.transform = 'translateX(4px)'
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = isBestMatch ? '#faad14' : '#e0e0e0'
+                                e.currentTarget.style.background = isBestMatch ? '#fffbf0' : '#fff'
+                                e.currentTarget.style.transform = 'translateX(0)'
+                              }}
+                            >
+                              {cardContent}
                             </Link>
                           )
                         })}

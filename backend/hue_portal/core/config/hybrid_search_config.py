@@ -41,6 +41,11 @@ CONTENT_TYPE_CONFIGS: Dict[str, HybridSearchConfig] = {
         vector_weight=0.6,
         min_hybrid_score=0.1
     ),
+    "legal": HybridSearchConfig(
+        bm25_weight=0.6,
+        vector_weight=0.4,
+        min_hybrid_score=0.12
+    ),
 }
 
 

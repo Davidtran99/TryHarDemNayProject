@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../.Trash/image_annotation_tool"
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "TryHarDemNayProject"
+	}
+}

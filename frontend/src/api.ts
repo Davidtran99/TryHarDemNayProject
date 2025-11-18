@@ -28,6 +28,82 @@ export async function fetchAdvisories(params: Record<string, string> = {}) {
   return res.json();
 }
 
+export async function fetchLegalSections(params: Record<string, string> = {}) {
+  const q = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/legal-sections?${q}`);
+  if (!res.ok) throw new Error("Failed to load legal sections");
+  return res.json();
+}
+
+export type LegalUploadPayload = {
+  file: File;
+  code: string;
+  title?: string;
+  docType?: string;
+  summary?: string;
+  issued_by?: string;
+  issued_at?: string;
+  source_url?: string;
+  metadata?: Record<string, unknown> | null;
+  token?: string;
+  mimeType?: string;
+};
+
+export type IngestionJob = {
+  id: string;
+  status: string;
+  progress: number;
+  code: string;
+  filename: string;
+  error_message?: string;
+  stats?: {
+    sections?: number;
+    images?: number;
+  };
+  document?: Record<string, any> | null;
+};
+
+export async function uploadLegalDocument(payload: LegalUploadPayload): Promise<IngestionJob> {
+  const formData = new FormData();
+  formData.append("file", payload.file);
+  formData.append("code", payload.code);
+  if (payload.title) formData.append("title", payload.title);
+  if (payload.docType) formData.append("doc_type", payload.docType);
+  if (payload.summary) formData.append("summary", payload.summary);
+  if (payload.issued_by) formData.append("issued_by", payload.issued_by);
+  if (payload.issued_at) formData.append("issued_at", payload.issued_at);
+  if (payload.source_url) formData.append("source_url", payload.source_url);
+  if (payload.mimeType) formData.append("mime_type", payload.mimeType);
+  if (payload.metadata) formData.append("metadata", JSON.stringify(payload.metadata));
+
+  const headers: Record<string, string> = {};
+  if (payload.token) {
+    headers["X-Upload-Token"] = payload.token;
+  }
+
+  const res = await fetch(`${API_BASE}/legal-documents/upload/`, {
+    method: "POST",
+    body: formData,
+    headers,
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({}));
+    const message = errorBody?.error || "Failed to upload document";
+    throw new Error(message);
+  }
+  return res.json();
+}
+
+export async function fetchIngestionJob(jobId: string): Promise<IngestionJob> {
+  const res = await fetch(`${API_BASE}/legal-ingestion-jobs/${jobId}/`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to fetch ingestion job");
+  return res.json();
+}
+
 const SESSION_STORAGE_KEY = "chatbot_session_id";
 
 function getSessionId(): string | null {

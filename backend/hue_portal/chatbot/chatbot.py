@@ -11,7 +11,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
 import numpy as np
-from hue_portal.core.models import Procedure, Fine, Office, Advisory
+from hue_portal.core.models import Procedure, Fine, Office, Advisory, LegalSection
 from hue_portal.core.search_ml import search_with_ml, expand_query_with_synonyms
 
 
@@ -76,6 +76,18 @@ INTENT_TRAINING_DATA = {
         "lừa đảo online",
         "cảnh báo mạo danh"
     ],
+    "search_legal": [
+        "thông tư",
+        "quyết định",
+        "văn bản pháp luật",
+        "điều lệnh",
+        "điều khoản",
+        "điều số",
+        "thanh tra điều",
+        "điều bao nhiêu",
+        "xem điều",
+        "xem thông tư",
+    ],
     "general_query": [
         "xin chào", "giúp tôi", "tư vấn", "hỏi",
         "thông tin", "tra cứu", "tìm kiếm"
@@ -93,6 +105,7 @@ RESPONSE_TEMPLATES = {
     "search_procedure": "Tôi tìm thấy {count} thủ tục liên quan đến '{query}':",
     "search_office": "Tôi tìm thấy {count} đơn vị liên quan đến '{query}':",
     "search_advisory": "Tôi tìm thấy {count} cảnh báo liên quan đến '{query}':",
+    "search_legal": "Tôi tìm thấy {count} tài liệu pháp lý/liên quan đến '{query}':",
     "general_query": "Tôi có thể giúp bạn tra cứu thông tin về thủ tục, mức phạt, đơn vị hoặc cảnh báo. Bạn muốn tìm gì?",
     "no_results": "Xin lỗi, tôi không tìm thấy thông tin liên quan đến '{query}'. Vui lòng thử lại với từ khóa khác.",
     "greeting": "Xin chào! Tôi có thể giúp bạn tra cứu thông tin về thủ tục hành chính, mức phạt giao thông, danh bạ đơn vị và cảnh báo an ninh. Bạn cần tìm gì?",
@@ -104,6 +117,12 @@ class Chatbot:
         self.intent_classifier = None
         self.intent_metrics: Optional[Dict[str, Any]] = None
         self._load_classifier()
+
+    @staticmethod
+    def _legal_download_path(document_id: Optional[int]) -> Optional[str]:
+        if not document_id:
+            return None
+        return f"/api/legal-documents/{document_id}/download/"
     
     def _load_classifier(self):
         """Load pretrained classifier nếu có, fallback tự huấn luyện seed data."""
@@ -276,6 +295,7 @@ class Chatbot:
             "search_procedure": ["thủ tục", "hồ sơ", "giấy tờ"],
             "search_office": ["địa chỉ", "công an", "đơn vị"],
             "search_advisory": ["cảnh báo", "lừa đảo", "scam"],
+            "search_legal": ["thông tư", "quyết định", "điều", "văn bản"],
         }
         
         if intent in intent_keywords:
@@ -396,6 +416,13 @@ class Chatbot:
         )
         if has_advisory_keywords:
             return ("search_advisory", 0.8)
+
+        has_legal_keywords = any(
+            self._keyword_in(query_lower, query_ascii, kw) for kw in
+            ["thông tư", "quyết định", "văn bản", "điều số", "điều lệnh", "dieu", "thong tu", "quyet dinh", "van ban"]
+        )
+        if has_legal_keywords:
+            return ("search_legal", 0.85)
         
         has_office_keywords = any(
             self._keyword_in(query_lower, query_ascii, kw) for kw in
@@ -407,7 +434,7 @@ class Chatbot:
         # Only treat as greeting if it's VERY short (<= 3 words) and ONLY contains greeting words
         # AND does NOT contain any other keywords
         has_any_keyword = (has_fine_keywords or has_procedure_keywords or 
-                          has_office_keywords or has_advisory_keywords)
+                          has_office_keywords or has_advisory_keywords or has_legal_keywords)
         
         if (len(query_words) <= 3 and 
             any(self._keyword_in(query_lower, query_ascii, kw) for kw in ["xin chào", "chào", "hello", "hi", "xin chao", "chao"]) and
@@ -488,6 +515,26 @@ class Chatbot:
                 "title": a.title,
                 "summary": a.summary,
             }} for a in search_results]
+        elif intent == "search_legal":
+            qs = LegalSection.objects.select_related("document").all()
+            text_fields = ["section_title", "section_code", "content"]
+            search_results = search_with_ml(qs, keywords, text_fields, top_k=limit, min_score=0.1)
+            results = [{"type": "legal", "data": {
+                "id": s.id,
+                "section_code": s.section_code,
+                "section_title": s.section_title,
+                "level": s.level,
+                "document_id": s.document.id if s.document else None,
+                "document_code": s.document.code if s.document else "",
+                "document_title": s.document.title if s.document else "",
+                "content": s.content,
+                "excerpt": s.excerpt,
+                "page_start": s.page_start,
+                "page_end": s.page_end,
+                "source_file": s.document.source_file if s.document else "",
+                "source_url": s.document.source_url if s.document else "",
+                "download_url": self._legal_download_path(s.document.id if s.document else None),
+            }} for s in search_results]
         
         return {
             "intent": intent,
@@ -547,6 +594,24 @@ class Chatbot:
                 "summary": getattr(doc, "summary", ""),
                 "source_url": getattr(doc, "source_url", ""),
                 "published_at": _to_iso(getattr(doc, "published_at", None)),
+            })
+        elif content_type == "legal":
+            legal_doc = getattr(doc, "document", None)
+            document_id = getattr(legal_doc, "id", None) if legal_doc else None
+            base.update({
+                "section_code": getattr(doc, "section_code", ""),
+                "section_title": getattr(doc, "section_title", ""),
+                "level": getattr(doc, "level", ""),
+                "content": getattr(doc, "content", ""),
+                "excerpt": getattr(doc, "excerpt", ""),
+                "page_start": getattr(doc, "page_start", None),
+                "page_end": getattr(doc, "page_end", None),
+                "document_id": document_id,
+                "document_code": getattr(legal_doc, "code", "") if legal_doc else "",
+                "document_title": getattr(legal_doc, "title", "") if legal_doc else "",
+                "source_file": getattr(legal_doc, "source_file", "") if legal_doc else "",
+                "source_url": getattr(legal_doc, "source_url", "") if legal_doc else "",
+                "download_url": self._legal_download_path(document_id),
             })
         else:
             # Fallback: include common attributes but skip non-serializable ones
@@ -628,11 +693,13 @@ class Chatbot:
         # Check advisory keywords first to avoid conflict with "công an" in office keywords
         has_advisory_keywords = any(kw in query_lower for kw in ["cảnh báo", "lừa đảo", "scam", "mạo danh", "thủ đoạn", "cảnh giác"])
         has_office_keywords = any(kw in query_lower for kw in ["địa chỉ", "công an", "số điện thoại", "giờ làm việc"])
+        legal_keywords = ["thông tư", "quyết định", "điều lệnh", "điều ", "văn bản", "điều số"]
+        has_legal_keywords = any(kw in query_lower for kw in legal_keywords)
         
         # Only treat as greeting if it's very short AND has no other keywords AND classified as greeting
         is_simple_greeting = (len(query_words) <= 3 and 
                              any(greeting in query_lower for greeting in ["xin chào", "chào", "hello", "hi"]) and
-                             not (has_fine_keywords or has_procedure_keywords or has_office_keywords or has_advisory_keywords))
+                             not (has_fine_keywords or has_procedure_keywords or has_office_keywords or has_advisory_keywords or has_legal_keywords))
         
         if is_simple_greeting and intent == "greeting":
             response = {

@@ -1,5 +1,7 @@
 import os
+import sys
 from pathlib import Path
+from corsheaders.defaults import default_headers
 import environ
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -70,6 +72,22 @@ DATABASES = {
     }
 }
 
+if "test" in sys.argv and env.bool("TEST_USE_SQLITE", default=True):
+    DATABASES["default"] = {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": str(BASE_DIR / "test_db.sqlite3"),
+    }
+
+if "test" in sys.argv and env.bool("TEST_DISABLE_MIGRATIONS", default=True):
+    class DisableMigrations(dict):
+        def __contains__(self, item):
+            return True
+
+        def __getitem__(self, item):
+            return None
+
+    MIGRATION_MODULES = DisableMigrations()
+
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
@@ -93,11 +111,22 @@ REST_FRAMEWORK = {
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "static"
 
+MEDIA_ROOT = env("DJANGO_MEDIA_ROOT", default=str(BASE_DIR / "media"))
+MEDIA_ROOT = Path(MEDIA_ROOT)
+MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+MEDIA_URL = env("DJANGO_MEDIA_URL", default="/media/")
+FILE_UPLOAD_PERMISSIONS = 0o644
+
+LEGAL_UPLOAD_TOKEN = env("LEGAL_UPLOAD_TOKEN", default="")
+
 CORS_ALLOW_ALL_ORIGINS = env.bool("CORS_ALLOW_ALL_ORIGINS", default=True)  # Allow all in dev
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173", "http://127.0.0.1:5173"])
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-CORS_ALLOW_HEADERS = ["*"]
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "X-Upload-Token",
+    "x-upload-token",
+]
 
 SECURE_HSTS_SECONDS = 31536000
 SECURE_SSL_REDIRECT = False
@@ -107,4 +136,16 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
+
+CELERY_BROKER_URL = env(
+    "CELERY_BROKER_URL",
+    default=env("REDIS_URL", default="redis://localhost:6379/0"),
+)
+CELERY_RESULT_BACKEND = env(
+    "CELERY_RESULT_BACKEND",
+    default=CELERY_BROKER_URL,
+)
+CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=True)
+CELERY_TASK_TIME_LIMIT = env.int("CELERY_TASK_TIME_LIMIT", default=600)
+CELERY_TASK_SOFT_TIME_LIMIT = env.int("CELERY_TASK_SOFT_TIME_LIMIT", default=540)
 

@@ -3,7 +3,7 @@ RAG (Retrieval-Augmented Generation) pipeline for answer generation.
 """
 from typing import List, Dict, Any, Optional
 from .hybrid_search import hybrid_search
-from .models import Procedure, Fine, Office, Advisory
+from .models import Procedure, Fine, Office, Advisory, LegalSection
 from hue_portal.chatbot.chatbot import format_fine_amount
 
 
@@ -36,6 +36,9 @@ def retrieve_top_k_documents(
     elif content_type == 'advisory':
         queryset = Advisory.objects.all()
         text_fields = ['title', 'summary']
+    elif content_type == 'legal':
+        queryset = LegalSection.objects.select_related("document").all()
+        text_fields = ['section_title', 'section_code', 'content']
     else:
         return []
     
@@ -102,6 +105,8 @@ def generate_answer_template(
         return _generate_office_answer(query, documents)
     elif content_type == 'advisory':
         return _generate_advisory_answer(query, documents)
+    elif content_type == 'legal':
+        return _generate_legal_answer(query, documents)
     else:
         return _generate_general_answer(query, documents)
 
@@ -238,6 +243,35 @@ def _generate_advisory_answer(query: str, documents: List[Advisory]) -> str:
     return answer
 
 
+def _generate_legal_answer(query: str, documents: List[LegalSection]) -> str:
+    count = len(documents)
+    answer = f"Tôi tìm thấy {count} trích đoạn pháp lý liên quan đến '{query}':\n\n"
+
+    if not documents:
+        return answer
+
+    best = documents[0]
+    answer += "Kết quả chính xác nhất:\n"
+    answer += f"• {best.section_code}: {best.section_title or 'Nội dung'} ({best.document.title})\n"
+    if best.page_start:
+        answer += f"  Trang: {best.page_start}"
+        if best.page_end and best.page_end != best.page_start:
+            answer += f"-{best.page_end}"
+        answer += "\n"
+    snippet = (best.content[:200] + "...") if len(best.content) > 200 else best.content
+    answer += f"  Nội dung: {snippet}\n\n"
+
+    if count > 1:
+        answer += "Các trích đoạn khác:\n"
+        for idx, doc in enumerate(documents[1:5], start=2):
+            answer += f"{idx}. {doc.section_code} - {doc.document.title}\n"
+            snippet = (doc.content[:180] + "...") if len(doc.content) > 180 else doc.content
+            answer += f"   {snippet}\n\n"
+    if count > 5:
+        answer += f"... và {count - 5} trích đoạn khác.\n"
+    return answer
+
+
 def _generate_general_answer(query: str, documents: List[Any]) -> str:
     """Generate general answer."""
     count = len(documents)
@@ -272,6 +306,7 @@ def rag_pipeline(
         'search_fine': 'fine',
         'search_office': 'office',
         'search_advisory': 'advisory',
+        'search_legal': 'legal',
     }
     
     content_type = intent_to_type.get(intent, 'procedure')

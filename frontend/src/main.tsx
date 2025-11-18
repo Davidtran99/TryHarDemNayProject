@@ -9,6 +9,7 @@ import Fines from './pages/Fines'
 import Directory from './pages/Directory'
 import Advisories from './pages/Advisories'
 import Chat from './pages/Chat'
+import LegalUpload from './pages/LegalUpload'
 import './tokens.css'
 import './styles.css'
 
@@ -20,6 +21,7 @@ const router = createBrowserRouter([
   { path: '/directory', element: <Directory /> },
   { path: '/advisories', element: <Advisories /> },
   { path: '/chat', element: <Chat /> },
+  { path: '/legal-upload', element: <LegalUpload /> },
 ], {
   future: {
     v7_startTransition: true,
