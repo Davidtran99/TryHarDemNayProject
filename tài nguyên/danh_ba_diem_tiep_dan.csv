@@ -1,0 +1,15 @@
+unit_name,address,district,working_hours,phone,email,latitude,longitude,service_scope,notes
+,,,,,,,,,
+"Công an tỉnh Thừa Thiên Huế - Tiếp công dân",,,,,,,,"Tiếp nhận thủ tục hành chính lĩnh vực Công an",
+"Phòng Cảnh sát PCCC & CNCH (Công an T.T. Huế)",,,,,,,,"Tư vấn/tiếp nhận thủ tục PCCC",
+"Công an TP. Huế - Bộ phận một cửa",,,,,,,,"Tiếp nhận TTHC cư trú/ANTT/PCCC theo thẩm quyền",
+"Công an thị xã Hương Thủy - Bộ phận một cửa",,,,,,,,"Tiếp nhận TTHC cho người dân địa bàn Hương Thủy",
+"Công an thị xã Hương Trà - Bộ phận một cửa",,,,,,,,"Tiếp nhận TTHC cho người dân địa bàn Hương Trà",
+"Công an huyện Phú Vang - Bộ phận một cửa",,,,,,,,"Tiếp nhận TTHC cho người dân địa bàn Phú Vang",
+"Công an huyện Phú Lộc - Bộ phận một cửa",,,,,,,,"Tiếp nhận TTHC cho người dân địa bàn Phú Lộc",
+"Công an huyện Quảng Điền - Bộ phận một cửa",,,,,,,,"Tiếp nhận TTHC cho người dân địa bàn Quảng Điền",
+"Công an huyện Phong Điền - Bộ phận một cửa",,,,,,,,"Tiếp nhận TTHC cho người dân địa bàn Phong Điền",
+"Công an huyện A Lưới - Bộ phận một cửa",,,,,,,,"Tiếp nhận TTHC cho người dân địa bàn A Lưới",
+"Công an huyện Nam Đông - Bộ phận một cửa",,,,,,,,"Tiếp nhận TTHC cho người dân địa bàn Nam Đông",
+
+

@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Công Cụ Tạo Labels - Kéo Thả</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-bottom: 2px solid #e0e0e0;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #48bb78;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #38a169;
+        }
+
+        .btn-danger {
+            background: #f56565;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #e53e3e;
+        }
+
+        .btn-secondary {
+            background: #718096;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4a5568;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-label {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #48bb78;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .file-label:hover {
+            background: #38a169;
+            transform: translateY(-2px);
+        }
+
+        .label-input {
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            width: 200px;
+        }
+
+        .label-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            overflow: auto;
+            background: #f9f9f9;
+            min-height: 600px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #imageCanvas {
+            max-width: 100%;
+            cursor: crosshair;
+            border: 2px dashed #ccc;
+        }
+
+        .label {
+            position: absolute;
+            background: rgba(102, 126, 234, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: move;
+            user-select: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            min-width: 80px;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .label:hover {
+            background: rgba(102, 126, 234, 1);
+            transform: scale(1.05);
+        }
+
+        .label .delete-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 20px;
+            height: 20px;
+            background: #f56565;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .label .delete-btn:hover {
+            background: #e53e3e;
+            transform: scale(1.2);
+        }
+
+        .info-panel {
+            padding: 20px;
+            background: #f9f9f9;
+            border-top: 2px solid #e0e0e0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .info-panel h3 {
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+
+        .label-item {
+            background: white;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .label-item .coords {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .instructions {
+            background: #e6f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .instructions h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .instructions ul {
+            margin-left: 20px;
+        }
+
+        .instructions li {
+            margin-bottom: 5px;
+            color: #555;
+        }
+
+        .export-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 2px solid #e0e0e0;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            resize: vertical;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 Công Cụ Tạo Labels - Kéo Thả</h1>
+            <p>Upload ảnh, kéo thả để tạo labels, xuất tọa độ cho script Python</p>
+        </div>
+
+        <div class="toolbar">
+            <label for="imageInput" class="file-label">
+                📁 Chọn Ảnh
+            </label>
+            <input type="file" id="imageInput" accept="image/*">
+            
+            <input type="text" id="labelText" class="label-input" placeholder="Nhập tên label (ví dụ: HỒ LỚN)">
+            
+            <button class="btn btn-primary" onclick="addLabel()">➕ Thêm Label</button>
+            <button class="btn btn-success" onclick="exportCoords()">💾 Xuất Tọa Độ</button>
+            <button class="btn btn-secondary" onclick="clearAll()">🗑️ Xóa Tất Cả</button>
+            <button class="btn btn-primary" onclick="downloadImage()">⬇️ Tải Ảnh Có Labels</button>
+        </div>
+
+        <div class="canvas-container" id="canvasContainer">
+            <canvas id="imageCanvas"></canvas>
+        </div>
+
+        <div class="info-panel">
+            <div class="instructions">
+                <h4>📖 Hướng Dẫn Sử Dụng:</h4>
+                <ul>
+                    <li><strong>Chọn ảnh:</strong> Click "Chọn Ảnh" để upload ảnh vệ tinh</li>
+                    <li><strong>Tạo label:</strong> Nhập tên label, click "Thêm Label", sau đó click vào vị trí trên ảnh</li>
+                    <li><strong>Di chuyển label:</strong> Kéo thả label đến vị trí mong muốn</li>
+                    <li><strong>Xóa label:</strong> Click nút X trên label</li>
+                    <li><strong>Xuất tọa độ:</strong> Click "Xuất Tọa Độ" để lấy code Python</li>
+                </ul>
+            </div>
+
+            <h3>📋 Danh Sách Labels:</h3>
+            <div id="labelsList"></div>
+
+            <div class="export-section">
+                <h3>💻 Code Python (Tọa Độ):</h3>
+                <textarea id="exportCode" readonly></textarea>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let labels = [];
+        let canvas, ctx;
+        let image = null;
+        let imageScale = 1;
+        let isDragging = false;
+        let dragLabel = null;
+        let dragOffset = { x: 0, y: 0 };
+
+        // Khởi tạo canvas
+        window.onload = function() {
+            canvas = document.getElementById('imageCanvas');
+            ctx = canvas.getContext('2d');
+            
+            // Load ảnh từ input
+            document.getElementById('imageInput').addEventListener('change', handleImageUpload);
+            
+            // Click trên canvas để thêm label
+            canvas.addEventListener('click', handleCanvasClick);
+            
+            // Drag and drop cho labels
+            canvas.addEventListener('mousedown', handleMouseDown);
+            canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('mouseup', handleMouseUp);
+        };
+
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    image = img;
+                    // Tính scale để fit canvas
+                    const maxWidth = window.innerWidth - 100;
+                    const maxHeight = 600;
+                    
+                    imageScale = Math.min(maxWidth / img.width, maxHeight / img.height, 1);
+                    
+                    canvas.width = img.width * imageScale;
+                    canvas.height = img.height * imageScale;
+                    
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    updateLabels();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function handleCanvasClick(e) {
+            if (!image) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / imageScale;
+            const y = (e.clientY - rect.top) / imageScale;
+            
+            const labelText = document.getElementById('labelText').value.trim();
+            if (labelText) {
+                addLabelAtPosition(x, y, labelText);
+                document.getElementById('labelText').value = '';
+            }
+        }
+
+        function addLabel() {
+            if (!image) {
+                alert('Vui lòng chọn ảnh trước!');
+                return;
+            }
+            const labelText = document.getElementById('labelText').value.trim();
+            if (!labelText) {
+                alert('Vui lòng nhập tên label!');
+                return;
+            }
+            // Label sẽ được thêm khi click trên canvas
+            canvas.style.cursor = 'crosshair';
+        }
+
+        function addLabelAtPosition(x, y, text) {
+            const label = {
+                id: Date.now(),
+                text: text,
+                x: x,
+                y: y,
+                displayX: x * imageScale,
+                displayY: y * imageScale
+            };
+            labels.push(label);
+            updateLabels();
+            updateLabelsList();
+            canvas.style.cursor = 'default';
+        }
+
+        function handleMouseDown(e) {
+            if (!image) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            // Kiểm tra xem có click vào label không
+            for (let i = labels.length - 1; i >= 0; i--) {
+                const label = labels[i];
+                const labelWidth = ctx.measureText(label.text).width + 24;
+                const labelHeight = 30;
+                
+                if (mouseX >= label.displayX && 
+                    mouseX <= label.displayX + labelWidth &&
+                    mouseY >= label.displayY && 
+                    mouseY <= label.displayY + labelHeight) {
+                    isDragging = true;
+                    dragLabel = label;
+                    dragOffset.x = mouseX - label.displayX;
+                    dragOffset.y = mouseY - label.displayY;
+                    return;
+                }
+            }
+        }
+
+        function handleMouseMove(e) {
+            if (!isDragging || !dragLabel) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            dragLabel.displayX = mouseX - dragOffset.x;
+            dragLabel.displayY = mouseY - dragOffset.y;
+            dragLabel.x = dragLabel.displayX / imageScale;
+            dragLabel.y = dragLabel.displayY / imageScale;
+            
+            updateLabels();
+        }
+
+        function handleMouseUp(e) {
+            isDragging = false;
+            dragLabel = null;
+        }
+
+        function updateLabels() {
+            if (!image) return;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+            
+            // Vẽ labels
+            labels.forEach(label => {
+                label.displayX = label.x * imageScale;
+                label.displayY = label.y * imageScale;
+                
+                const textWidth = ctx.measureText(label.text).width;
+                const padding = 12;
+                const labelWidth = textWidth + padding * 2;
+                const labelHeight = 30;
+                
+                // Vẽ background
+                ctx.fillStyle = 'rgba(102, 126, 234, 0.9)';
+                ctx.fillRect(label.displayX, label.displayY, labelWidth, labelHeight);
+                
+                // Vẽ text
+                ctx.fillStyle = 'white';
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                ctx.fillText(label.text, label.displayX + padding, label.displayY + 8);
+            });
+        }
+
+        function updateLabelsList() {
+            const listDiv = document.getElementById('labelsList');
+            listDiv.innerHTML = '';
+            
+            if (labels.length === 0) {
+                listDiv.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">Chưa có labels nào</p>';
+                return;
+            }
+            
+            labels.forEach((label, index) => {
+                const item = document.createElement('div');
+                item.className = 'label-item';
+                item.innerHTML = `
+                    <div>
+                        <strong>${label.text}</strong>
+                        <span class="coords"> - (${Math.round(label.x)}, ${Math.round(label.y)})</span>
+                    </div>
+                    <button class="btn btn-danger" onclick="deleteLabel(${label.id})" style="padding: 5px 10px; font-size: 12px;">Xóa</button>
+                `;
+                listDiv.appendChild(item);
+            });
+        }
+
+        function deleteLabel(id) {
+            labels = labels.filter(label => label.id !== id);
+            updateLabels();
+            updateLabelsList();
+        }
+
+        function clearAll() {
+            if (confirm('Bạn có chắc muốn xóa tất cả labels?')) {
+                labels = [];
+                updateLabels();
+                updateLabelsList();
+                document.getElementById('exportCode').value = '';
+            }
+        }
+
+        function exportCoords() {
+            if (labels.length === 0) {
+                alert('Chưa có labels nào để xuất!');
+                return;
+            }
+            
+            let code = '# Tọa độ labels (từ công cụ web)\n';
+            code += '# Copy code này vào script Python của bạn\n\n';
+            
+            labels.forEach(label => {
+                const varName = label.text.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+                code += `# ${label.text}\n`;
+                code += `${varName}_x = width * ${(label.x / (image ? image.width : 1)).toFixed(4)}\n`;
+                code += `${varName}_y = height * ${(label.y / (image ? image.height : 1)).toFixed(4)}\n`;
+                code += `${varName}_label = "${label.text}"\n\n`;
+            });
+            
+            code += '# Vẽ labels:\n';
+            labels.forEach(label => {
+                const varName = label.text.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+                code += `draw_label(draw, int(${varName}_x), int(${varName}_y), ${varName}_label, bg_color=YELLOW, text_color=BLACK, font=font_medium)\n`;
+            });
+            
+            document.getElementById('exportCode').value = code;
+        }
+
+        function downloadImage() {
+            if (!image || labels.length === 0) {
+                alert('Vui lòng thêm ảnh và labels trước!');
+                return;
+            }
+            
+            // Tạo canvas mới với kích thước gốc
+            const downloadCanvas = document.createElement('canvas');
+            downloadCanvas.width = image.width;
+            downloadCanvas.height = image.height;
+            const downloadCtx = downloadCanvas.getContext('2d');
+            
+            // Vẽ ảnh
+            downloadCtx.drawImage(image, 0, 0);
+            
+            // Vẽ labels
+            labels.forEach(label => {
+                const textWidth = downloadCtx.measureText(label.text).width;
+                const padding = 12;
+                const labelWidth = textWidth + padding * 2;
+                const labelHeight = 30;
+                
+                // Vẽ background
+                downloadCtx.fillStyle = 'rgba(102, 126, 234, 0.9)';
+                downloadCtx.fillRect(label.x, label.y, labelWidth, labelHeight);
+                
+                // Vẽ text
+                downloadCtx.fillStyle = 'white';
+                downloadCtx.font = '14px Arial';
+                downloadCtx.textAlign = 'left';
+                downloadCtx.textBaseline = 'top';
+                downloadCtx.fillText(label.text, label.x + padding, label.y + 8);
+            });
+            
+            // Download
+            downloadCanvas.toBlob(function(blob) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'image_with_labels.png';
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+    </script>
+</body>
+</html>
+

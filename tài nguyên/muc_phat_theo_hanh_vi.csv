@@ -1,0 +1,23 @@
+violation_code,violation_name,article,decree,min_fine,max_fine,license_points,remedial_measures,notes,source_url
+V001,Vượt đèn đỏ,,,,,,,,
+V002,Đi quá tốc độ trong khu vực đông dân cư,,,,,,,,
+V003,Điều khiển xe khi nồng độ cồn vượt mức cho phép,,,,,,,,
+V004,Không đội mũ bảo hiểm khi đi mô tô/xe máy,,,,,,,,
+V005,Đi sai làn/đường,,,,,,,,
+V006,Sử dụng điện thoại khi đang điều khiển phương tiện,,,,,,,,
+V007,Không có/không mang theo giấy phép lái xe phù hợp,,,,,,,,
+V008,Không có đăng ký xe hoặc không mang theo giấy đăng ký xe,,,,,,,,
+V009,Dừng/đỗ xe sai quy định,,,,,,,,
+V010,Không thắt dây an toàn trên ô tô,,,,,,,,
+V011,Không nhường đường cho xe ưu tiên,,,,,,,,
+V012,Chở quá số người quy định trên mô tô/xe máy,,,,,,,,
+V013,Chở hàng cồng kềnh/quá khổ trên xe máy,,,,,,,,
+V014,Không bật đèn chiếu sáng khi chạy ban đêm/đường hầm,,,,,,,,
+V015,Đi ngược chiều trên đường một chiều,,,,,,,,
+V016,Quay đầu xe nơi cấm quay đầu,,,,,,,,
+V017,Không dừng trước vạch dừng khi có tín hiệu,,,,,,,,
+V018,Vượt xe không đúng quy định (đè vạch/nơi cấm vượt),,,,,,,,
+V019,Đi vào đường cấm/khu vực cấm,,,,,,,,
+V020,Không có hoặc không gắn biển số đúng quy định,,,,,,,,
+
+

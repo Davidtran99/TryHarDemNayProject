@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Báo Cáo Hệ Thống</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Times New Roman', 'Arial', sans-serif;
+            font-size: 16px; /* Tiêu chuẩn nội dung chính: 16-18px */
+            line-height: 1.6; /* Tối ưu cho đọc: 1.5-1.7 */
+            color: #2c3e50;
+            background: #fafbfc;
+            margin: 0;
+            padding: 30px 20px;
+        }
+
+
+        /* Container */
+        .container {
+            max-width: 1200px; /* Tiêu chuẩn: 1200-1440px cho desktop */
+            margin: 0 auto;
+            padding: 0;
+        }
+
+        /* Table of Contents */
+        .toc {
+            background: linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 100%);
+            border: 2px solid #4a90c2;
+            border-radius: 8px;
+            padding: 30px 40px;
+            margin-bottom: 40px;
+            box-shadow: 0 4px 12px rgba(30, 58, 95, 0.08);
+        }
+
+        .toc h2 {
+            color: #1e3a5f;
+            font-size: 28px; /* Tiêu chuẩn tiêu đề: 24-36px */
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #4a90c2;
+            text-align: center;
+        }
+
+        .toc ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .toc > ul > li {
+            margin-bottom: 15px;
+            font-size: 18px; /* Tiêu chuẩn nội dung chính */
+            font-weight: 600;
+            color: #1e3a5f;
+        }
+
+        .toc > ul > li > a {
+            color: #2d5a87;
+            text-decoration: none;
+            display: block;
+            padding: 8px 12px;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+
+        .toc > ul > li > a:hover {
+            background: #d6e9f5;
+            color: #1e3a5f;
+            padding-left: 18px;
+        }
+
+        .toc ul ul {
+            margin-left: 30px;
+            margin-top: 8px;
+        }
+
+        .toc ul ul li {
+            font-size: 15px; /* Tiêu chuẩn chú thích: 12-14px, nhưng mục lục cần rõ hơn */
+            font-weight: normal;
+            margin-bottom: 6px;
+        }
+
+        .toc ul ul li a {
+            color: #4a6fa5;
+            text-decoration: none;
+        }
+
+        .toc ul ul li a:hover {
+            color: #2d5a87;
+            text-decoration: underline;
+        }
+
+        /* Report Section */
+        .report-section {
+            background: white;
+            margin-bottom: 40px;
+            padding: 40px 50px; /* Tối ưu padding: 40-50px */
+            box-shadow: 0 4px 16px rgba(30, 58, 95, 0.1);
+            border-left: 6px solid #1e3a5f;
+            border-radius: 4px;
+            page-break-inside: avoid;
+        }
+
+        .report-section h2 {
+            color: #1e3a5f;
+            font-size: 32px; /* Tiêu chuẩn tiêu đề lớn: 24-36px */
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #4a90c2;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-weight: 700;
+            counter-reset: section;
+        }
+
+        .report-section:first-of-type h2:before {
+            content: "I. ";
+            color: #2d5a87;
+            margin-right: 10px;
+        }
+
+        .report-section:last-of-type h2:before {
+            content: "II. ";
+            color: #2d5a87;
+            margin-right: 10px;
+        }
+
+        .report-section h3 {
+            color: #2d5a87;
+            font-size: 22px; /* Tiêu chuẩn tiêu đề phụ: 20-24px */
+            margin-top: 35px;
+            margin-bottom: 18px;
+            padding-left: 20px;
+            border-left: 5px solid #4a90c2;
+            font-weight: 600;
+            counter-reset: subsection;
+        }
+
+        .report-section h3:before {
+            content: counter(section, decimal) ". ";
+            counter-increment: section;
+            color: #4a6fa5;
+            margin-right: 8px;
+        }
+
+        .report-section h4 {
+            color: #4a6fa5;
+            font-size: 18px; /* Tiêu chuẩn tiêu đề nhỏ: 16-18px */
+            margin-top: 25px;
+            margin-bottom: 12px;
+            font-weight: 600;
+            padding-left: 15px;
+            border-left: 3px solid #6ba3d1;
+        }
+
+        .report-section h4:before {
+            content: counter(section, decimal) "." counter(subsection, decimal) ". ";
+            counter-increment: subsection;
+            color: #6ba3d1;
+            margin-right: 6px;
+        }
+
+        .container {
+            counter-reset: chapter;
+        }
+
+        .report-section {
+            counter-reset: section subsection;
+        }
+
+        .report-section p {
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+
+        .report-section ul,
+        .report-section ol {
+            margin-left: 30px;
+            margin-bottom: 15px;
+        }
+
+        .report-section li {
+            margin-bottom: 8px;
+        }
+
+        .report-section strong {
+            color: #1e3a5f;
+            font-weight: 600;
+        }
+
+        /* Meta Info */
+        .meta-info {
+            background: linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 100%);
+            padding: 20px 25px;
+            border-radius: 6px;
+            margin-bottom: 25px;
+            border: 1px solid #b8d4e8;
+            box-shadow: 0 2px 8px rgba(30, 58, 95, 0.06);
+        }
+
+        .meta-info p {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            font-size: 15px; /* Tiêu chuẩn: 14-16px cho bảng */
+            box-shadow: 0 3px 10px rgba(30, 58, 95, 0.12);
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #c8d8e8;
+        }
+
+        table th {
+            background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+            color: white;
+            padding: 14px 16px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #4a90c2;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e0e8f0;
+        }
+
+        table tr:nth-child(even) {
+            background: #f8fafc;
+        }
+
+        table tr:nth-child(odd) {
+            background: white;
+        }
+
+        table tr:hover {
+            background: #f0f4f8;
+        }
+
+        table tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 5px 10px;
+            background: linear-gradient(135deg, #2d5a87 0%, #4a90c2 100%);
+            color: white;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 5px;
+            box-shadow: 0 2px 4px rgba(30, 58, 95, 0.2);
+        }
+
+        .badge-success {
+            background: #28a745;
+        }
+
+        .badge-warning {
+            background: #ffc107;
+            color: #333;
+        }
+
+        /* Feature List */
+        .feature-list {
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .feature-list li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+
+        .feature-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #4a90c2;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        /* Divider */
+        .divider {
+            height: 2px;
+            background: linear-gradient(to right, transparent, #4a90c2, transparent);
+            margin: 35px 0;
+            border-radius: 2px;
+        }
+
+        /* Print Styles - Tối ưu cho PDF */
+        @media print {
+            @page {
+                size: A4;
+                margin: 2.5cm 2cm; /* Tiêu chuẩn A4: 2-2.5cm */
+                /* Ẩn header và footer mặc định của browser */
+                margin-top: 2cm;
+                margin-bottom: 2cm;
+            }
+
+            /* Lưu ý: Header/footer của browser (ngày giờ, tiêu đề) 
+               cần tắt thủ công trong cài đặt in của browser:
+               - Chrome/Edge: More settings > Headers and footers (tắt)
+               - Firefox: More Settings > Margins & Headers/Footers (tắt)
+               - Safari: Show Details > Headers & Footers (tắt)
+            */
+
+            body {
+                background: white;
+                color: black;
+                font-size: 12pt; /* Tiêu chuẩn tài liệu chính phủ: 12pt */
+                line-height: 1.6; /* Tối ưu cho đọc */
+            }
+
+            .container {
+                max-width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+
+            .report-section {
+                page-break-inside: avoid;
+                page-break-after: auto;
+                box-shadow: none;
+                border: none;
+                border-left: none; /* Loại bỏ vạch xanh bên trái khi in */
+                padding: 15px 20px; /* Tối ưu cho print */
+                margin-bottom: 25px;
+            }
+
+            .toc {
+                page-break-after: always;
+                background: white !important;
+                border: 1px solid #ccc;
+            }
+
+            .report-section h2 {
+                page-break-after: avoid;
+                page-break-inside: avoid;
+                color: #1e3a5f;
+                font-size: 18pt; /* Tiêu chuẩn: 16-18pt cho tiêu đề lớn */
+                margin-top: 0;
+                padding-top: 20px;
+            }
+
+            .report-section h3 {
+                page-break-after: avoid;
+                color: #2d5a87;
+                font-size: 14pt; /* Tiêu chuẩn: 14pt cho tiêu đề phụ */
+                margin-top: 20pt;
+                border-left: none; /* Loại bỏ vạch xanh bên trái khi in */
+                padding-left: 0; /* Loại bỏ padding-left */
+            }
+
+            .report-section h4 {
+                page-break-after: avoid;
+                color: #0055a5;
+                font-size: 12pt; /* Tiêu chuẩn: 12pt cho tiêu đề nhỏ */
+                border-left: none; /* Loại bỏ vạch xanh bên trái khi in */
+                padding-left: 0; /* Loại bỏ padding-left */
+            }
+
+            table {
+                page-break-inside: auto; /* Cho phép bảng bị cắt nếu quá dài */
+                border-collapse: collapse;
+                width: 100%;
+                font-size: 11pt; /* Tăng từ 10pt lên 11pt để dễ đọc hơn */
+                margin: 15px 0;
+                border: 1px solid #333; /* Border rõ ràng hơn cho print */
+            }
+
+            table thead {
+                display: table-header-group; /* Lặp lại header khi sang trang mới */
+            }
+
+            table tbody {
+                display: table-row-group;
+            }
+
+            table th {
+                background: #1e3a5f !important;
+                color: white !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                padding: 10px 8px; /* Tăng padding cho dễ đọc */
+                border: 1px solid #000;
+                font-weight: 600;
+                font-size: 11pt;
+            }
+
+            table td {
+                padding: 8px; /* Tăng padding cho dễ đọc */
+                border: 1px solid #333; /* Border rõ ràng hơn */
+                vertical-align: top; /* Căn trên cho nội dung dài */
+                word-wrap: break-word; /* Tự động xuống dòng nếu quá dài */
+            }
+
+            table tr {
+                page-break-inside: avoid; /* Không cắt dòng */
+                page-break-after: auto;
+            }
+
+            /* Đảm bảo bảng không bị tràn ra ngoài */
+            table {
+                max-width: 100%;
+                overflow: visible;
+            }
+
+            /* Tối ưu cho các cột có width cố định */
+            table th[style*="width"],
+            table td[style*="width"] {
+                max-width: 100%;
+            }
+
+            /* Đảm bảo bảng hiển thị đúng trong A4 */
+            table {
+                table-layout: auto; /* Tự động điều chỉnh width */
+            }
+
+            /* Tối ưu cho bảng có nội dung dài */
+            table td {
+                max-width: 0; /* Cho phép word-wrap hoạt động */
+                overflow-wrap: break-word;
+                hyphens: auto;
+            }
+
+            .meta-info {
+                background: #f8f9fa !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                border: 1px solid #ddd;
+                padding: 10px;
+                margin-bottom: 15px;
+            }
+
+            .badge {
+                background: #2d5a87 !important;
+                color: white !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                padding: 2px 6px;
+                border-radius: 3px;
+            }
+
+            .divider {
+                display: none;
+            }
+
+            ul, ol {
+                page-break-inside: avoid;
+            }
+
+            li {
+                page-break-inside: avoid;
+            }
+
+            /* Đảm bảo không bị cắt ở giữa */
+            h2, h3, h4 {
+                orphans: 3;
+                widows: 3;
+            }
+
+            /* Ẩn các phần tử không cần thiết khi in */
+            a[href]:after {
+                content: ""; /* Không hiển thị URL sau links */
+            }
+
+            a {
+                color: black !important;
+                text-decoration: none !important;
+            }
+
+            /* Ẩn các phần tử decorative */
+            .toc ul ul li a:hover,
+            .toc > ul > li > a:hover {
+                background: transparent !important;
+                padding-left: 12px !important;
+            }
+
+            /* Tối ưu màu sắc cho in */
+            .toc {
+                background: white !important;
+                box-shadow: none !important;
+            }
+
+            .report-section {
+                box-shadow: none !important;
+                background: white !important;
+            }
+
+            /* Loại bỏ gradients khi in */
+            table th {
+                background: #1e3a5f !important;
+            }
+
+            .badge {
+                background: #2d5a87 !important;
+            }
+
+            p {
+                orphans: 3;
+                widows: 3;
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .report-section {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Mục Lục -->
+        <div class="toc">
+            <h2>MỤC LỤC</h2>
+            <ul>
+                <li>
+                    <a href="#bao-cao-chuc-nang">I. BÁO CÁO CHỨC NĂNG HỆ THỐNG</a>
+                    <ul>
+                        <li><a href="#tong-quan">1. Tổng quan hệ thống</a></li>
+                        <li><a href="#module-chuc-nang">2. Các module chức năng chính</a></li>
+                        <li><a href="#tinh-nang-noi-bat">3. Tính năng nổi bật</a></li>
+                        <li><a href="#kien-truc">4. Kiến trúc hệ thống</a></li>
+                        <li><a href="#thong-ke">5. Thống kê hệ thống</a></li>
+                        <li><a href="#ket-luan-1">6. Kết luận</a></li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="#bao-cao-model-ml">II. BÁO CÁO TÓM TẮT MODEL ML</a>
+                    <ul>
+                        <li><a href="#vai-tro">Vai trò</a></li>
+                        <li><a href="#tinh-nang-ml">Tính năng</a></li>
+                        <li><a href="#hieu-suat">Hiệu suất</a></li>
+                        <li><a href="#de-xuat">Đề xuất cải thiện</a></li>
+                        <li><a href="#ket-luan-2">Kết luận</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Báo Cáo Chức Năng -->
+        <section id="bao-cao-chuc-nang" class="report-section">
+            <h2>BÁO CÁO CHỨC NĂNG HỆ THỐNG</h2>
+
+            <div class="meta-info">
+                <p><strong>Ngày báo cáo:</strong> 13/11/2025</p>
+                <p><strong>Phiên bản hệ thống:</strong> 1.0</p>
+                <p><strong>Trạng thái:</strong> <span class="badge badge-success">Đang vận hành</span></p>
+            </div>
+
+            <h3 id="tong-quan">TỔNG QUAN HỆ THỐNG</h3>
+            <p>Hệ thống Tra cứu Thông tin là nền tảng số hóa dịch vụ công, cung cấp giải pháp tra cứu thông tin toàn diện cho người dân và cán bộ công an tỉnh Thừa Thiên Huế. Hệ thống tích hợp công nghệ Machine Learning để cung cấp trải nghiệm tra cứu thông minh, nhanh chóng và chính xác.</p>
+
+            <h4>Mục tiêu</h4>
+            <ul class="feature-list">
+                <li><strong>Số hóa dịch vụ công:</strong> Chuyển đổi các thủ tục tra cứu truyền thống sang môi trường số</li>
+                <li><strong>Nâng cao trải nghiệm người dùng:</strong> Cung cấp giao diện hiện đại, dễ sử dụng</li>
+                <li><strong>Tăng hiệu quả:</strong> Giảm thời gian tra cứu, tăng độ chính xác thông tin</li>
+                <li><strong>Bảo mật cao:</strong> Vận hành hoàn toàn nội bộ, không phụ thuộc dịch vụ bên ngoài</li>
+            </ul>
+
+            <div class="divider"></div>
+
+            <h3 id="module-chuc-nang">CÁC MODULE CHỨC NĂNG CHÍNH</h3>
+
+            <h4>Chatbot Tư vấn Thông minh</h4>
+            <p><strong>Mô tả:</strong> Hệ thống chatbot sử dụng công nghệ Machine Learning để hiểu và trả lời câu hỏi tự nhiên bằng tiếng Việt.</p>
+
+            <p><strong>Tính năng:</strong></p>
+            <ul class="feature-list">
+                <li><strong>Phân loại ý định tự động:</strong> Nhận diện 6 loại câu hỏi (mức phạt, thủ tục, danh bạ, cảnh báo, chào hỏi, câu hỏi chung)</li>
+                <li><strong>Tìm kiếm ngữ nghĩa:</strong> Tìm kết quả phù hợp dựa trên ý nghĩa, không chỉ từ khóa</li>
+                <li><strong>Xử lý tiếng Việt:</strong> Hỗ trợ cả có dấu và không dấu ("mức phạt" = "muc phat")</li>
+                <li><strong>Gợi ý câu hỏi:</strong> Hiển thị các câu hỏi mẫu theo từng chủ đề</li>
+                <li><strong>Hiển thị kết quả trực quan:</strong> Trả về kết quả kèm link chi tiết, phân loại theo màu sắc</li>
+            </ul>
+
+            <p><strong>Ví dụ sử dụng:</strong></p>
+            <ul>
+                <li>"Mức phạt vượt đèn đỏ là bao nhiêu?"</li>
+                <li>"Thủ tục đăng ký cư trú cần giấy tờ gì?"</li>
+                <li>"Địa chỉ công an phường ở đâu?"</li>
+            </ul>
+
+            <p><strong>Lợi ích:</strong></p>
+            <ul>
+                <li>Người dùng không cần biết cấu trúc dữ liệu, chỉ cần hỏi tự nhiên</li>
+                <li>Tiết kiệm thời gian tra cứu</li>
+            </ul>
+
+            <h4>Tra cứu Thủ tục Hành chính</h4>
+            <p><strong>Mô tả:</strong> Module tra cứu thông tin chi tiết về các thủ tục hành chính trong lĩnh vực công an.</p>
+
+            <p><strong>Thông tin cung cấp:</strong></p>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Trường thông tin</th>
+                        <th>Mô tả</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Tên thủ tục</strong></td>
+                        <td>Tên đầy đủ và chính xác</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Lĩnh vực</strong></td>
+                        <td>ANTT, Cư trú, PCCC, Giao thông</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Cấp độ</strong></td>
+                        <td>Tỉnh, Huyện, Xã</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Điều kiện</strong></td>
+                        <td>Các điều kiện cần thiết để thực hiện thủ tục</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Hồ sơ</strong></td>
+                        <td>Danh sách giấy tờ cần chuẩn bị</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Lệ phí</strong></td>
+                        <td>Mức phí (nếu có)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Thời hạn</strong></td>
+                        <td>Thời gian xử lý</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Cơ quan thực hiện</strong></td>
+                        <td>Đơn vị tiếp nhận</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Nguồn</strong></td>
+                        <td>Link tham khảo chính thức</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p><strong>Tính năng tìm kiếm:</strong></p>
+            <ul>
+                <li>Tìm kiếm theo từ khóa (tên, lĩnh vực, điều kiện)</li>
+                <li>Lọc theo lĩnh vực (domain)</li>
+                <li>Lọc theo cấp độ (level)</li>
+                <li>Tìm kiếm thông minh với ML (hiểu ngữ nghĩa)</li>
+            </ul>
+
+            <h4>Tra cứu Mức phạt</h4>
+            <p><strong>Mô tả:</strong> Hệ thống tra cứu mức phạt vi phạm hành chính trong lĩnh vực công an và giao thông.</p>
+
+            <p><strong>Thông tin cung cấp:</strong></p>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Trường thông tin</th>
+                        <th>Mô tả</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Tên hành vi</strong></td>
+                        <td>Mô tả chi tiết hành vi vi phạm</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Mã vi phạm</strong></td>
+                        <td>Mã số theo quy định</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Điều/Khoản</strong></td>
+                        <td>Tham chiếu điều luật</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Nghị định</strong></td>
+                        <td>Nghị định quy định</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Mức phạt</strong></td>
+                        <td>Phạm vi từ tối thiểu đến tối đa</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Điểm trừ</strong></td>
+                        <td>Điểm trừ bằng lái (nếu có)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Nguồn</strong></td>
+                        <td>Link tham khảo chính thức</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p><strong>Tính năng tìm kiếm:</strong></p>
+            <ul>
+                <li>Tìm kiếm theo tên hành vi</li>
+                <li>Tìm kiếm theo mã vi phạm</li>
+                <li>Tìm kiếm theo điều luật</li>
+                <li>Tìm kiếm thông minh với ML</li>
+            </ul>
+
+            <h4>Danh bạ Đơn vị</h4>
+            <p><strong>Mô tả:</strong> Tra cứu thông tin liên hệ và địa chỉ các đơn vị công an trong tỉnh.</p>
+
+            <p><strong>Thông tin cung cấp:</strong></p>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Trường thông tin</th>
+                        <th>Mô tả</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Tên đơn vị</strong></td>
+                        <td>Tên đầy đủ đơn vị</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Địa chỉ</strong></td>
+                        <td>Địa chỉ chi tiết</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Quận/Huyện</strong></td>
+                        <td>Phân loại theo địa bàn</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Giờ làm việc</strong></td>
+                        <td>Thời gian tiếp dân</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Số điện thoại</strong></td>
+                        <td>Hotline liên hệ</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Email</strong></td>
+                        <td>Địa chỉ email (nếu có)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Tọa độ</strong></td>
+                        <td>Vĩ độ, kinh độ (hỗ trợ chỉ đường)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Phạm vi phục vụ</strong></td>
+                        <td>Lĩnh vực công tác</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p><strong>Tính năng tìm kiếm:</strong></p>
+            <ul>
+                <li>Tìm kiếm theo tên đơn vị</li>
+                <li>Tìm kiếm theo địa chỉ</li>
+                <li>Lọc theo quận/huyện</li>
+                <li>Tìm kiếm thông minh với ML</li>
+            </ul>
+
+            <h4>Cảnh báo An ninh</h4>
+            <p><strong>Mô tả:</strong> Cung cấp thông tin cảnh báo về các thủ đoạn lừa đảo, scam mới nhất.</p>
+
+            <p><strong>Thông tin cung cấp:</strong></p>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Trường thông tin</th>
+                        <th>Mô tả</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Tiêu đề</strong></td>
+                        <td>Tên thủ đoạn lừa đảo</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Tóm tắt</strong></td>
+                        <td>Mô tả chi tiết thủ đoạn</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Ngày đăng</strong></td>
+                        <td>Thời gian cảnh báo</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Nguồn</strong></td>
+                        <td>Link tham khảo chính thức</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p><strong>Tính năng:</strong></p>
+            <ul>
+                <li>Hiển thị theo thời gian (mới nhất trước)</li>
+                <li>Tìm kiếm theo từ khóa</li>
+                <li>Tìm kiếm thông minh với ML</li>
+            </ul>
+
+            <h4>Tìm kiếm Thống nhất (Unified Search)</h4>
+            <p><strong>Mô tả:</strong> Tìm kiếm xuyên suốt tất cả các module trong một lần truy vấn.</p>
+
+            <p><strong>Tính năng:</strong></p>
+            <ul>
+                <li><strong>Tìm kiếm đa module:</strong> Tìm trong tất cả 4 loại dữ liệu (Thủ tục, Mức phạt, Đơn vị, Cảnh báo)</li>
+                <li><strong>Xếp hạng thông minh:</strong> Kết quả được sắp xếp theo độ liên quan</li>
+                <li><strong>Phân loại tự động:</strong> Mỗi kết quả được gắn nhãn loại dữ liệu</li>
+                <li><strong>Giới hạn kết quả:</strong> Hiển thị tối đa 50 kết quả phù hợp nhất</li>
+            </ul>
+
+            <p><strong>Lợi ích:</strong></p>
+            <ul>
+                <li>Người dùng không cần biết thông tin thuộc module nào</li>
+                <li>Tiết kiệm thời gian, không cần tìm kiếm nhiều lần</li>
+                <li>Kết quả được sắp xếp theo độ liên quan, dễ tìm thấy thông tin cần thiết</li>
+            </ul>
+
+            <div class="divider"></div>
+
+            <h3 id="tinh-nang-noi-bat">TÍNH NĂNG NỔI BẬT</h3>
+
+            <h4>Công nghệ Machine Learning</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Thông số</th>
+                        <th>Giá trị</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Chức năng</strong></td>
+                        <td>Tự động nhận diện loại câu hỏi của người dùng</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Độ chính xác</strong></td>
+                        <td>~85%</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Số loại ý định</strong></td>
+                        <td>6 loại khác nhau</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="divider"></div>
+
+            <h3 id="kien-truc">KIẾN TRÚC HỆ THỐNG</h3>
+
+            <h4>Frontend (Giao diện Người dùng)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Công nghệ</th>
+                        <th>Mô tả</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>React 18+</strong></td>
+                        <td>Framework JavaScript</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Vite</strong></td>
+                        <td>Build tool hiện đại</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Ant Design</strong></td>
+                        <td>UI Component Library</td>
+                    </tr>
+                    <tr>
+                        <td><strong>React Router</strong></td>
+                        <td>Điều hướng</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p><strong>Tính năng:</strong></p>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Tính năng</th>
+                        <th>Mô tả</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Single Page Application (SPA)</strong></td>
+                        <td>Ứng dụng một trang</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Client-side routing</strong></td>
+                        <td>Điều hướng phía client</td>
+                    </tr>
+                    <tr>
+                        <td><strong>API integration</strong></td>
+                        <td>Tích hợp API</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Responsive design</strong></td>
+                        <td>Thiết kế đáp ứng</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4>Backend (Hệ thống Xử lý)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Công nghệ</th>
+                        <th>Mô tả</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Django 4+</strong></td>
+                        <td>Python Web Framework</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Django REST Framework</strong></td>
+                        <td>API</td>
+                    </tr>
+                    <tr>
+                        <td><strong>PostgreSQL</strong></td>
+                        <td>Database</td>
+                    </tr>
+                    <tr>
+                        <td><strong>scikit-learn</strong></td>
+                        <td>Machine Learning</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p><strong>Tính năng:</strong></p>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 40%;">Tính năng</th>
+                        <th>Mô tả</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>RESTful API</strong></td>
+                        <td>API chuẩn REST</td>
+                    </tr>
+                    <tr>
+                        <td><strong>ML model integration</strong></td>
+                        <td>Tích hợp model Machine Learning</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Database ORM</strong></td>
+                        <td>Object-Relational Mapping</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Authentication & Authorization</strong></td>
+                        <td>Xác thực và phân quyền</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4>Database (Cơ sở Dữ liệu)</h4>
+            <p><strong>Cấu trúc:</strong></p>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Bảng dữ liệu</th>
+                        <th>Mô tả</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Procedure</strong></td>
+                        <td>Thủ tục hành chính</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Fine</strong></td>
+                        <td>Mức phạt</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Office</strong></td>
+                        <td>Đơn vị công an</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Advisory</strong></td>
+                        <td>Cảnh báo an ninh</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Synonym</strong></td>
+                        <td>Từ đồng nghĩa (hỗ trợ tìm kiếm)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>AuditLog</strong></td>
+                        <td>Nhật ký truy cập</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="divider"></div>
+
+            <h3 id="thong-ke">THỐNG KÊ HỆ THỐNG</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Chỉ số</th>
+                        <th>Giá trị</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Số module chức năng</td>
+                        <td>6 module</td>
+                    </tr>
+                    <tr>
+                        <td>Loại dữ liệu tra cứu</td>
+                        <td>4 loại (Thủ tục, Mức phạt, Đơn vị, Cảnh báo)</td>
+                    </tr>
+                    <tr>
+                        <td>Độ chính xác ML</td>
+                        <td>~85%</td>
+                    </tr>
+                    <tr>
+                        <td>Thời gian phản hồi</td>
+                        <td>&lt;500ms</td>
+                    </tr>
+                    <tr>
+                        <td>Hỗ trợ ngôn ngữ</td>
+                        <td>Tiếng Việt (có/không dấu)</td>
+                    </tr>
+                    <tr>
+                        <td>Loại ý định chatbot</td>
+                        <td>6 loại</td>
+                    </tr>
+                    <tr>
+                        <td>Giao diện</td>
+                        <td>Responsive (Mobile, Tablet, Desktop)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="divider"></div>
+
+            <h3 id="ket-luan-1">KẾT LUẬN</h3>
+
+            <p><strong>Điểm mạnh:</strong></p>
+            <ul class="feature-list">
+                <li>Công nghệ hiện đại, áp dụng ML cho tìm kiếm thông minh</li>
+                <li>Giao diện thân thiện, dễ sử dụng</li>
+                <li>Bảo mật cao, vận hành nội bộ</li>
+                <li>Đầy đủ chức năng tra cứu cần thiết</li>
+                <li>Hiệu suất tốt, phản hồi nhanh</li>
+            </ul>
+
+            <p><strong>Hướng phát triển:</strong></p>
+            <ul>
+                <li>Mở rộng dữ liệu tra cứu</li>
+                <li>Nâng cao độ chính xác ML model</li>
+                <li>Bổ sung tính năng phân tích, thống kê</li>
+                <li>Tối ưu hóa hiệu suất hệ thống</li>
+            </ul>
+
+            <div class="meta-info" style="margin-top: 30px;">
+                <p><strong>Người lập báo cáo:</strong> Hệ thống</p>
+                <p><strong>Ngày:</strong> 13/11/2025</p>
+                <p><strong>Phiên bản:</strong> 1.0</p>
+            </div>
+        </section>
+
+        <!-- Báo Cáo Model ML -->
+        <section id="bao-cao-model-ml" class="report-section">
+            <h2>BÁO CÁO TÓM TẮT MODEL ML</h2>
+            <p style="text-align: center; font-size: 18px; color: #2d5a87; margin-bottom: 30px;">
+                <strong>Chatbot Công an Thừa Thiên Huế</strong>
+            </p>
+
+            <div class="meta-info">
+                <p><strong>Ngày báo cáo:</strong> 2025-11-13</p>
+                <p><strong>Phiên bản:</strong> 1.0</p>
+                <p><strong>Trạng thái:</strong> <span class="badge badge-success">Đang vận hành</span> (Giai đoạn MVP - Sản phẩm tối thiểu khả dụng)</p>
+                <p><strong>Công nghệ:</strong> scikit-learn 1.3.2 (Local, không dùng AI bên ngoài)</p>
+                <p><strong>Môi trường:</strong> Python 3.11+, Django Backend</p>
+            </div>
+
+            <h3 id="vai-tro">VAI TRÒ</h3>
+            <p>Model ML đóng vai trò <strong>"Bộ não"</strong> của chatbot, giúp:</p>
+            <ol>
+                <li><strong>Hiểu ý định người dùng</strong> - Phân loại câu hỏi vào đúng chủ đề</li>
+                <li><strong>Tìm kiếm thông minh</strong> - Tìm kết quả phù hợp nhất với câu hỏi</li>
+                <li><strong>Xử lý tiếng Việt</strong> - Hỗ trợ cả có dấu và không dấu</li>
+            </ol>
+
+            <div class="divider"></div>
+
+            <h3 id="tinh-nang-ml">TÍNH NĂNG</h3>
+
+            <h4>Intent Classification (Phân loại ý định)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Thông tin</th>
+                        <th>Chi tiết</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Chức năng</strong></td>
+                        <td>Phân loại câu hỏi vào 6 loại: mức phạt, thủ tục, danh bạ, cảnh báo, chào hỏi, câu hỏi chung</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Confidence Score</strong></td>
+                        <td>0.5 - 0.95</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Algorithm</strong></td>
+                        <td>Multinomial Naive Bayes</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Vectorization</strong></td>
+                        <td>TF-IDF (unigrams + bigrams)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Training data</strong></td>
+                        <td>~50 mẫu</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Độ chính xác</strong></td>
+                        <td><span class="badge">~85%</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4>Semantic Search (Tìm kiếm ngữ nghĩa)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Thông tin</th>
+                        <th>Chi tiết</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Loại dữ liệu</strong></td>
+                        <td>Procedure, Fine, Office, Advisory</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Xếp hạng</strong></td>
+                        <td>Theo độ tương đồng</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Synonym expansion</strong></td>
+                        <td>Hỗ trợ từ đồng nghĩa</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Vectorization</strong></td>
+                        <td>TF-IDF</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Similarity</strong></td>
+                        <td>Cosine Similarity</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Query expansion</strong></td>
+                        <td>Với synonyms</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Hiệu năng</strong></td>
+                        <td><span class="badge">&lt;500ms</span> (ước tính)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4>Xử Lý Tiếng Việt</h4>
+            <p><strong>Tính năng:</strong></p>
+            <ul class="feature-list">
+                <li>Hỗ trợ có dấu và không dấu ("mức phạt" = "muc phat")</li>
+                <li>Loại bỏ stopwords tự động</li>
+                <li>Normalize text (lowercase, khoảng trắng)</li>
+                <li>Synonym expansion từ database</li>
+            </ul>
+
+            <div class="divider"></div>
+
+            <h3 id="hieu-suat">HIỆU SUẤT</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Giá trị</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Intent Accuracy</td>
+                        <td>~85%</td>
+                    </tr>
+                    <tr>
+                        <td>Response Time</td>
+                        <td>&lt;500ms</td>
+                    </tr>
+                    <tr>
+                        <td>Training Samples</td>
+                        <td>~50 mẫu</td>
+                    </tr>
+                    <tr>
+                        <td>Intent Classes</td>
+                        <td>6 loại</td>
+                    </tr>
+                    <tr>
+                        <td>Memory Usage</td>
+                        <td>Phụ thuộc dataset</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="divider"></div>
+
+            <h3 id="de-xuat">ĐỀ XUẤT CẢI THIỆN</h3>
+
+            <h4>Ưu tiên cao:</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 10%;">STT</th>
+                        <th style="width: 40%;">Đề xuất</th>
+                        <th>Mô tả</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>1</strong></td>
+                        <td><strong>Mở rộng training data</strong></td>
+                        <td>Tăng từ 50 → 200-300 mẫu</td>
+                    </tr>
+                    <tr>
+                        <td><strong>2</strong></td>
+                        <td><strong>Sử dụng ML model thực sự</strong></td>
+                        <td>Thay keyword-based bằng model đã train</td>
+                    </tr>
+                    <tr>
+                        <td><strong>3</strong></td>
+                        <td><strong>Thêm caching</strong></td>
+                        <td>Cache TF-IDF vectors và similarity scores</td>
+                    </tr>
+                    <tr>
+                        <td><strong>4</strong></td>
+                        <td><strong>Validation & Metrics</strong></td>
+                        <td>Đo accuracy, precision, recall</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4>Đề xuất nâng cấp:</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 10%;">STT</th>
+                        <th style="width: 40%;">Đề xuất</th>
+                        <th>Mô tả</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>1</strong></td>
+                        <td><strong>Cải thiện search</strong></td>
+                        <td>Thử nghiệm thuật toán BM25 thay vì TF-IDF để nâng cao độ chính xác và hiệu suất tìm kiếm, đặc biệt với dataset lớn</td>
+                    </tr>
+                    <tr>
+                        <td><strong>2</strong></td>
+                        <td><strong>Tối ưu memory</strong></td>
+                        <td>Áp dụng batch processing và lazy loading, chỉ load dữ liệu cần thiết khi có yêu cầu, giảm memory footprint đáng kể</td>
+                    </tr>
+                    <tr>
+                        <td><strong>3</strong></td>
+                        <td><strong>Conversation context</strong></td>
+                        <td>Lưu trữ và sử dụng lịch sử hội thoại theo session, cho phép chatbot hiểu ngữ cảnh và trả lời chính xác hơn với các câu hỏi tiếp theo</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="divider"></div>
+
+            <h3 id="ket-luan-2">KẾT LUẬN</h3>
+            <p>Model ML hiện tại <strong>đáp ứng được yêu cầu cơ bản</strong> của chatbot tra cứu, hoạt động ổn định với độ chính xác ~85%. Tuy nhiên, cần <strong>mở rộng training data và tối ưu hóa</strong> để đạt hiệu suất tốt hơn trong production.</p>
+
+            <div class="meta-info" style="margin-top: 30px;">
+                <p><strong>Ngày báo cáo:</strong> 2025-11-13</p>
+                <p><strong>Phiên bản:</strong> 1.0</p>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // Tự động rút ngắn title khi in để giảm nội dung hiển thị trong header
+        window.addEventListener('beforeprint', function() {
+            document.title = 'Báo Cáo Hệ Thống';
+        });
+    </script>
+</body>
+</html>
+

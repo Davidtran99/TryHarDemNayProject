@@ -1,0 +1,121 @@
+{
+  "version": "2025-11-13",
+  "language": "vi",
+  "description": "Tập mẫu ban đầu cho phân loại intent chatbot Công an Thừa Thiên Huế.",
+  "intents": [
+    {
+      "name": "search_fine",
+      "category": "tra_cuu_muc_phat",
+      "source": "seed_default",
+      "examples": [
+        "mức phạt",
+        "phạt bao nhiêu",
+        "tiền phạt",
+        "vi phạm giao thông",
+        "vượt đèn đỏ",
+        "nồng độ cồn",
+        "không đội mũ bảo hiểm",
+        "mức phạt là gì",
+        "phạt như thế nào",
+        "hành vi vi phạm",
+        "điều luật",
+        "nghị định",
+        "mức xử phạt"
+      ]
+    },
+    {
+      "name": "search_procedure",
+      "category": "tra_cuu_thu_tuc",
+      "source": "seed_default",
+      "examples": [
+        "thủ tục",
+        "làm thủ tục",
+        "hồ sơ",
+        "điều kiện",
+        "thủ tục cư trú",
+        "thủ tục ANTT",
+        "thủ tục PCCC",
+        "cần giấy tờ gì",
+        "làm như thế nào",
+        "quy trình",
+        "thời hạn",
+        "lệ phí",
+        "nơi nộp"
+      ]
+    },
+    {
+      "name": "search_office",
+      "category": "tra_cuu_danh_ba",
+      "source": "seed_default",
+      "examples": [
+        "địa chỉ",
+        "điểm tiếp dân",
+        "công an",
+        "phòng ban",
+        "số điện thoại",
+        "giờ làm việc",
+        "nơi tiếp nhận",
+        "đơn vị nào",
+        "ở đâu",
+        "liên hệ"
+      ]
+    },
+    {
+      "name": "search_advisory",
+      "category": "canh_bao",
+      "source": "seed_default",
+      "examples": [
+        "cảnh báo",
+        "lừa đảo",
+        "scam",
+        "thủ đoạn",
+        "cảnh giác",
+        "an toàn",
+        "bảo mật",
+        "cảnh báo lừa đảo giả danh công an",
+        "mạo danh cán bộ công an",
+        "lừa đảo mạo danh",
+        "cảnh báo an ninh",
+        "thủ đoạn lừa đảo",
+        "scam giả danh",
+        "cảnh giác lừa đảo online",
+        "lừa đảo qua điện thoại",
+        "cảnh báo bảo mật",
+        "mạo danh cán bộ",
+        "lừa đảo giả danh",
+        "cảnh báo lừa đảo",
+        "thủ đoạn scam",
+        "cảnh giác an toàn",
+        "lừa đảo online",
+        "cảnh báo mạo danh"
+      ]
+    },
+    {
+      "name": "general_query",
+      "category": "hoi_chung",
+      "source": "seed_default",
+      "examples": [
+        "xin chào",
+        "giúp tôi",
+        "tư vấn",
+        "hỏi",
+        "thông tin",
+        "tra cứu",
+        "tìm kiếm"
+      ]
+    },
+    {
+      "name": "greeting",
+      "category": "chao_hoi",
+      "source": "seed_default",
+      "examples": [
+        "chào bạn",
+        "xin chào",
+        "hello",
+        "hi",
+        "chào anh",
+        "chào chị"
+      ]
+    }
+  ]
+}

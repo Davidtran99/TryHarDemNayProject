@@ -1,0 +1,98 @@
+# Cursor Rules for Chatbot Project
+
+## Primary Rules (MUST READ FIRST)
+
+1. **CHATBOT_PROJECT_GUIDELINES.md** - Complete project guidelines including:
+   - Architecture principles (Search strategy, relevance ranking)
+   - Response quality standards (MUST include min_fine/max_fine, proper formatting)
+   - Intent classification priority rules
+   - API endpoint standards (trailing slashes, error handling)
+   - Performance optimization targets
+   - Code quality standards (type hints, docstrings, error handling)
+   - Security considerations
+   - Testing requirements
+
+2. **SHELL_COMMANDS.md** - Shell command best practices:
+   - ALWAYS use `cat << 'EOF'` for multi-line output with emoji
+   - NEVER use multiple `echo` commands with double quotes and emoji
+   - Prevents `dquote>` stuck errors
+
+3. **MARKDOWN_ORGANIZATION.md** - Markdown file organization:
+   - Files must be in `tài nguyên/báo cáo/YYYY-MM-DD/category/`
+   - Categories: backend, frontend, database, ml, plan, setup, general
+
+## Critical Project Rules
+
+### Search & Retrieval
+- Priority: Hybrid Search → PostgreSQL BM25 → TF-IDF → icontains
+- Exact keyword matches MUST be boosted and appear first
+- Results MUST be sorted by relevance score (highest first)
+- Top 5 results should have relevance score > 0.1
+
+### API Responses
+- For Fines: MUST include `min_fine` and `max_fine` formatted as "200.000 - 400.000 VNĐ"
+- For Procedures: MUST include dossier, fee, duration, authority
+- For Advisories: MUST include full summary, published_at, source_url
+- All numbers: Use thousand separators (200.000, not 200000)
+- Dates: "DD/MM/YYYY" format
+- Currency: "VNĐ" suffix
+
+### Intent Classification
+- Advisory keywords checked BEFORE office keywords (avoid "công an" conflict)
+- Exact keyword matching takes precedence over ML model
+- Confidence threshold: < 0.5 → fallback to keyword-based
+
+### Code Quality
+- Type hints for ALL function parameters and returns
+- Docstrings for ALL public functions/classes
+- Error handling with specific exception types
+- Logging for debugging (not print() in production)
+- Follow PEP 8 (Python) and TypeScript strict mode
+
+### API Endpoints
+- ALWAYS use trailing slashes: `/api/chat/` (not `/api/chat`)
+- Frontend MUST call endpoints with trailing slashes
+- Content-Type: `application/json`
+- Error responses: 400 (bad request), 500 (server error) with descriptive messages
+
+### Performance Targets
+- Health check: < 50ms
+- Simple queries: < 500ms
+- Complex queries (RAG): < 2s
+- First request (model loading): < 5s acceptable
+
+### Data Quality
+- NO NULL values in critical fields (code, name, min_fine, max_fine, title, summary)
+- Use Pydantic models for ETL validation
+- Log all errors to `backend/logs/data_quality/`
+- Verify data completeness after each ETL run
+
+### Frontend Integration
+- Use `VITE_API_BASE` environment variable
+- Default: `http://localhost:8000/api`
+- Development: `http://localhost:8090/api`
+- Display top 5 results sorted by relevance
+- Highlight exact matches
+- Show "Kết quả chính xác nhất:" for highest confidence
+
+### Testing
+- Test all intent types (fine, procedure, office, advisory)
+- Verify exact matches appear first
+- Check response formatting (currency, dates)
+- Test error handling
+- Verify data completeness
+
+## File Locations
+- Backend: `backend/hue_portal/`
+- Frontend: `frontend/src/`
+- Rules: `.cursor/rules/`
+- Reports: `tài nguyên/báo cáo/YYYY-MM-DD/category/`
+
+## When Making Changes
+1. Read `CHATBOT_PROJECT_GUIDELINES.md` first
+2. Follow code quality standards
+3. Update documentation
+4. Test thoroughly
+5. Verify performance impact
+6. Update relevant markdown reports
+
