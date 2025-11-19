@@ -91,6 +91,71 @@ class Advisory(models.Model):
         fields = [self.title, self.summary]
         return " ".join(str(f) for f in fields if f)
 
+
+class LegalDocument(models.Model):
+    code = models.CharField(max_length=120, unique=True)
+    title = models.CharField(max_length=500)
+    doc_type = models.CharField(max_length=50, blank=True, db_index=True)
+    issued_date = models.DateField(null=True, blank=True, db_index=True)
+    signer = models.CharField(max_length=200, blank=True)
+    agency = models.CharField(max_length=200, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    raw_text = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["title"]
+        indexes = [
+            models.Index(fields=["code"], name="legaldoc_code_idx"),
+            models.Index(fields=["doc_type", "issued_date"], name="legaldoc_type_issued_idx"),
+            models.Index(fields=["agency"], name="legaldoc_agency_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.code} - {self.title}"
+
+
+class LegalSection(models.Model):
+    LEVEL_CHOICES = [
+        ("article", "Điều"),
+        ("clause", "Khoản"),
+        ("point", "Điểm"),
+        ("other", "Khác"),
+    ]
+
+    document = models.ForeignKey(
+        LegalDocument, related_name="sections", on_delete=models.CASCADE
+    )
+    order = models.IntegerField()
+    level = models.CharField(max_length=20, choices=LEVEL_CHOICES, default="article")
+    section_code = models.CharField(max_length=120, blank=True, db_index=True)
+    section_title = models.CharField(max_length=500, blank=True, db_index=True)
+    excerpt = models.TextField(blank=True, default="")
+    content = models.TextField()
+    page_start = models.IntegerField(null=True, blank=True)
+    page_end = models.IntegerField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    tsv_body = SearchVectorField(null=True, editable=False)
+    embedding = models.BinaryField(null=True, blank=True, editable=False)
+    is_ocr = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [
+            GinIndex(fields=["tsv_body"], name="legalsection_tsv_idx"),
+            models.Index(fields=["document", "order"]),
+        ]
+        ordering = ["document", "order"]
+
+    def search_vector(self) -> str:
+        fields = [
+            self.section_code,
+            self.section_title,
+            self.content,
+            getattr(self.document, "title", ""),
+        ]
+        return " ".join(str(f) for f in fields if f)
+
 class Synonym(models.Model):
     keyword = models.CharField(max_length=120, unique=True)
     alias = models.CharField(max_length=120)

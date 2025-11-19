@@ -11,7 +11,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
 import numpy as np
-from hue_portal.core.models import Procedure, Fine, Office, Advisory
+from hue_portal.core.models import Procedure, Fine, Office, Advisory, LegalSection
 from hue_portal.core.search_ml import search_with_ml, expand_query_with_synonyms
 
 
@@ -50,6 +50,11 @@ INTENT_TRAINING_DATA = {
         "thủ tục cư trú", "thủ tục ANTT", "thủ tục PCCC",
         "cần giấy tờ gì", "làm như thế nào", "quy trình",
         "thời hạn", "lệ phí", "nơi nộp"
+    ],
+    "search_legal": [
+        "thông tư", "nghị định", "quyết định", "luật", "điều", "khoản",
+        "điều luật", "điều bao nhiêu", "áp dụng điều", "qđ", "tt", "qd",
+        "văn bản pháp luật", "chương", "mục", "xử lý kỷ luật", "điều lệ"
     ],
     "search_office": [
         "địa chỉ", "điểm tiếp dân", "công an", "phòng ban",
@@ -91,6 +96,7 @@ ARTIFACT_METRICS = TRAINING_DIR / "artifacts" / "metrics.json"
 RESPONSE_TEMPLATES = {
     "search_fine": "Tôi tìm thấy {count} mức phạt liên quan đến '{query}':",
     "search_procedure": "Tôi tìm thấy {count} thủ tục liên quan đến '{query}':",
+    "search_legal": "Tôi tìm thấy {count} điều khoản pháp luật liên quan đến '{query}':",
     "search_office": "Tôi tìm thấy {count} đơn vị liên quan đến '{query}':",
     "search_advisory": "Tôi tìm thấy {count} cảnh báo liên quan đến '{query}':",
     "general_query": "Tôi có thể giúp bạn tra cứu thông tin về thủ tục, mức phạt, đơn vị hoặc cảnh báo. Bạn muốn tìm gì?",
@@ -388,6 +394,29 @@ class Chatbot:
         )
         if has_procedure_keywords:
             return ("search_procedure", 0.8)
+
+        has_legal_keywords = any(
+            self._keyword_in(query_lower, query_ascii, kw)
+            for kw in [
+                "thông tư",
+                "nghị định",
+                "quyết định",
+                "điều",
+                "khoản",
+                "điều lệ",
+                "điểm",
+                "văn bản",
+                "qd",
+                "tt",
+                "nghi dinh",
+                "quyet dinh",
+                "dieu",
+                "khoan",
+                "luat",
+            ]
+        )
+        if has_legal_keywords:
+            return ("search_legal", 0.85)
         
         # Check advisory keywords first to avoid conflict with "công an" in office keywords
         has_advisory_keywords = any(
@@ -488,6 +517,27 @@ class Chatbot:
                 "title": a.title,
                 "summary": a.summary,
             }} for a in search_results]
+        elif intent == "search_legal":
+            qs = LegalSection.objects.select_related("document").all()
+            text_fields = ["section_title", "section_code", "content"]
+            search_results = search_with_ml(qs, keywords, text_fields, top_k=limit, min_score=0.1)
+            results = [
+                {
+                    "type": "legal",
+                    "data": {
+                        "id": s.id,
+                        "section_code": s.section_code,
+                        "section_title": s.section_title,
+                        "content": s.content,
+                        "document_code": getattr(s.document, "code", ""),
+                        "document_title": getattr(s.document, "title", ""),
+                        "doc_type": getattr(s.document, "doc_type", ""),
+                        "page_start": s.page_start,
+                        "page_end": s.page_end,
+                    },
+                }
+                for s in search_results
+            ]
         
         return {
             "intent": intent,
@@ -547,6 +597,19 @@ class Chatbot:
                 "summary": getattr(doc, "summary", ""),
                 "source_url": getattr(doc, "source_url", ""),
                 "published_at": _to_iso(getattr(doc, "published_at", None)),
+            })
+        elif content_type == "legal":
+            document = getattr(doc, "document", None)
+            base.update({
+                "section_code": getattr(doc, "section_code", ""),
+                "section_title": getattr(doc, "section_title", ""),
+                "content": getattr(doc, "content", ""),
+                "page_start": getattr(doc, "page_start", None),
+                "page_end": getattr(doc, "page_end", None),
+                "document_code": getattr(document, "code", "") if document else "",
+                "document_title": getattr(document, "title", "") if document else "",
+                "doc_type": getattr(document, "doc_type", "") if document else "",
+                "issued_date": _to_iso(getattr(document, "issued_date", None)) if document else None,
             })
         else:
             # Fallback: include common attributes but skip non-serializable ones
@@ -627,12 +690,13 @@ class Chatbot:
         has_procedure_keywords = any(kw in query_lower for kw in ["thủ tục", "hồ sơ", "điều kiện", "cư trú", "antt", "pccc"])
         # Check advisory keywords first to avoid conflict with "công an" in office keywords
         has_advisory_keywords = any(kw in query_lower for kw in ["cảnh báo", "lừa đảo", "scam", "mạo danh", "thủ đoạn", "cảnh giác"])
+        has_legal_keywords = any(kw in query_lower for kw in ["thông tư", "nghị định", "quyết định", "điều", "khoản", "văn bản", "luật", "qd", "tt"])
         has_office_keywords = any(kw in query_lower for kw in ["địa chỉ", "công an", "số điện thoại", "giờ làm việc"])
         
         # Only treat as greeting if it's very short AND has no other keywords AND classified as greeting
         is_simple_greeting = (len(query_words) <= 3 and 
                              any(greeting in query_lower for greeting in ["xin chào", "chào", "hello", "hi"]) and
-                             not (has_fine_keywords or has_procedure_keywords or has_office_keywords or has_advisory_keywords))
+                             not (has_fine_keywords or has_procedure_keywords or has_office_keywords or has_advisory_keywords or has_legal_keywords))
         
         if is_simple_greeting and intent == "greeting":
             response = {

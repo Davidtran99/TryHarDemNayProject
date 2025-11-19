@@ -1,10 +1,16 @@
 """
 RAG (Retrieval-Augmented Generation) pipeline for answer generation.
 """
+import re
 from typing import List, Dict, Any, Optional
+
 from .hybrid_search import hybrid_search
-from .models import Procedure, Fine, Office, Advisory
+from .models import Procedure, Fine, Office, Advisory, LegalSection
 from hue_portal.chatbot.chatbot import format_fine_amount
+
+ARTICLE_PATTERN = re.compile(r"\bđiều\s+\d+[a-z0-9/-]*", re.IGNORECASE)
+CLAUSE_PATTERN = re.compile(r"\bkhoản\s+\d+[a-z0-9/-]*", re.IGNORECASE)
+POINT_PATTERN = re.compile(r"\bđiểm\s+[a-z0-9/-]*", re.IGNORECASE)
 
 
 def retrieve_top_k_documents(
@@ -36,6 +42,9 @@ def retrieve_top_k_documents(
     elif content_type == 'advisory':
         queryset = Advisory.objects.all()
         text_fields = ['title', 'summary']
+    elif content_type == 'legal':
+        queryset = LegalSection.objects.select_related("document").all()
+        text_fields = ['section_title', 'section_code', 'content']
     else:
         return []
     
@@ -102,6 +111,8 @@ def generate_answer_template(
         return _generate_office_answer(query, documents)
     elif content_type == 'advisory':
         return _generate_advisory_answer(query, documents)
+    elif content_type == 'legal':
+        return _generate_legal_answer(query, documents)
     else:
         return _generate_general_answer(query, documents)
 
@@ -238,6 +249,39 @@ def _generate_advisory_answer(query: str, documents: List[Advisory]) -> str:
     return answer
 
 
+def _generate_legal_answer(query: str, documents: List[LegalSection]) -> str:
+    """Generate answer for legal section queries."""
+    if not documents:
+        return f"Xin lỗi, tôi không tìm thấy Điều/khoản nào liên quan đến '{query}'."
+
+    lines = []
+    best = documents[0]
+    document = getattr(best, "document", None)
+    doc_title = getattr(document, "title", "")
+    doc_code = getattr(document, "code", "")
+    lines.append("Kết quả chính xác nhất:")
+    header = f"{best.section_code or 'Điều'} - {best.section_title or ''}".strip()
+    lines.append(f"• {header}")
+    if doc_code or doc_title:
+        lines.append(f"  Văn bản: {doc_code} {doc_title}".strip())
+    excerpt = (best.content[:300] + "...") if len(best.content) > 300 else best.content
+    if excerpt:
+        lines.append(f"  Nội dung: {excerpt}")
+
+    if len(documents) > 1:
+        lines.append("")
+        lines.append("Các kết quả liên quan khác:")
+        for section in documents[1:5]:
+            sec_header = f"{section.section_code or 'Điều'} - {section.section_title or ''}".strip()
+            doc = getattr(section, "document", None)
+            doc_info = f"{getattr(doc, 'code', '')} {getattr(doc, 'title', '')}".strip()
+            lines.append(f"• {sec_header}")
+            if doc_info:
+                lines.append(f"  Văn bản: {doc_info}")
+
+    return "\n".join(line for line in lines if line)
+
+
 def _generate_general_answer(query: str, documents: List[Any]) -> str:
     """Generate general answer."""
     count = len(documents)
@@ -272,12 +316,15 @@ def rag_pipeline(
         'search_fine': 'fine',
         'search_office': 'office',
         'search_advisory': 'advisory',
+        'search_legal': 'legal',
     }
     
     content_type = intent_to_type.get(intent, 'procedure')
     
     # Retrieve documents
-    documents = retrieve_top_k_documents(query, content_type, top_k=top_k)
+    documents = list(retrieve_top_k_documents(query, content_type, top_k=top_k))
+    if content_type == "legal" and documents:
+        _prioritize_exact_legal_matches(documents, query)
     
     if not documents:
         return {
@@ -303,4 +350,64 @@ def rag_pipeline(
         'confidence': confidence,
         'content_type': content_type
     }
+
+
+def _prioritize_exact_legal_matches(documents: List[LegalSection], query: str) -> None:
+    """Boost score for sections matching Điều/Khoản/Điểm trong câu hỏi."""
+    token_infos = _extract_legal_tokens(query)
+    if not token_infos:
+        return
+
+    def score_section(section: LegalSection) -> float:
+        score = 0.0
+        code = (getattr(section, "section_code", "") or "").lower()
+        title = (getattr(section, "section_title", "") or "").lower()
+        content = (getattr(section, "content", "") or "").lower()
+        norm_code = _normalize_legal_token(code)
+        norm_title = _normalize_legal_token(title)
+        document = getattr(section, "document", None)
+        doc_code = (getattr(document, "code", "") or "").lower() if document else ""
+
+        for raw_token, norm_token in token_infos:
+            if not norm_token:
+                continue
+            if norm_code == norm_token:
+                score += 8.0
+            elif raw_token in code:
+                score += 3.0
+
+            if norm_title == norm_token:
+                score += 6.0
+            elif raw_token in title:
+                score += 2.0
+
+            if raw_token in content:
+                score += 1.0
+        if doc_code and doc_code in query.lower():
+            score += 0.5
+        return score
+
+    for doc in documents:
+        setattr(doc, "_match_score", score_section(doc))
+
+    documents.sort(
+        key=lambda doc: (
+            getattr(doc, "_match_score", 0.0),
+            getattr(doc, "_hybrid_score", getattr(doc, "_ml_score", 0.0))
+        ),
+        reverse=True,
+    )
+
+
+def _extract_legal_tokens(query: str) -> List[tuple[str, str]]:
+    tokens: List[tuple[str, str]] = []
+    for pattern in (ARTICLE_PATTERN, CLAUSE_PATTERN, POINT_PATTERN):
+        for match in pattern.findall(query):
+            raw = match.strip().lower()
+            tokens.append((raw, _normalize_legal_token(raw)))
+    return tokens
+
+
+def _normalize_legal_token(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", value.lower()) if value else ""
 

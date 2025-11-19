@@ -21,7 +21,13 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "hue_portal.hue_portal.settings"
 import django
 django.setup()
 
-from hue_portal.core.models import Procedure, Fine, Office, Advisory
+from hue_portal.core.models import (
+    Procedure,
+    Fine,
+    Office,
+    Advisory,
+    LegalSection,
+)
 from hue_portal.core.embeddings import (
     get_embedding_model,
     generate_embeddings_batch,
@@ -41,6 +47,13 @@ def prepare_text_for_embedding(obj) -> str:
         fields = [obj.unit_name, obj.address, obj.district, obj.service_scope]
     elif isinstance(obj, Advisory):
         fields = [obj.title, obj.summary]
+    elif isinstance(obj, LegalSection):
+        fields = [
+            obj.section_code,
+            obj.section_title,
+            obj.content,
+            obj.excerpt,
+        ]
     else:
         return ""
     
@@ -133,7 +146,7 @@ def generate_embeddings_for_model(model_class, model_name: str, batch_size: int 
 
 def main():
     parser = argparse.ArgumentParser(description="Generate embeddings for all models")
-    parser.add_argument("--model", choices=["procedure", "fine", "office", "advisory", "all"], 
+    parser.add_argument("--model", choices=["procedure", "fine", "office", "advisory", "legal", "all"], 
                        default="all", help="Which model to process")
     parser.add_argument("--batch-size", type=int, default=32, help="Batch size for embedding generation")
     parser.add_argument("--dry-run", action="store_true", help="Simulate without saving")
@@ -166,6 +179,7 @@ def main():
     models_to_process = []
     if args.model == "all":
         models_to_process = [
+            (LegalSection, "LegalSection"),
             (Procedure, "Procedure"),
             (Fine, "Fine"),
             (Office, "Office"),
@@ -177,6 +191,7 @@ def main():
             "fine": (Fine, "Fine"),
             "office": (Office, "Office"),
             "advisory": (Advisory, "Advisory"),
+            "legal": (LegalSection, "LegalSection"),
         }
         if args.model in model_map:
             models_to_process = [model_map[args.model]]
