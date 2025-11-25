@@ -1,4 +1,5 @@
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000/api";
+const DEFAULT_API_BASE = "https://davidtran999-hue-portal-backend.hf.space/api";
+const API_BASE = import.meta.env.VITE_API_BASE || DEFAULT_API_BASE;
 
 export async function fetchProcedures(params: Record<string, string> = {}) {
   const q = new URLSearchParams(params).toString();
