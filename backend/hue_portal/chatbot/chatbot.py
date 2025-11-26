@@ -416,17 +416,40 @@ class Chatbot:
             return ("search_office", 0.8)
         
         # Check legal keywords (check BEFORE advisory to avoid "công an" conflict)
+        # Expanded list to catch more variations
+        legal_keywords = [
+            # Văn bản pháp luật
+            "quyết định", "quy định", "thông tư", "nghị quyết", "văn bản pháp luật", "văn bản quy phạm", "điều lệnh",
+            "quyet dinh", "quy dinh", "thong tu", "nghi quyet", "van ban phap luat", "van ban quy pham", "dieu lenh",
+            # Kỷ luật đảng viên (various forms)
+            "kỷ luật đảng viên", "kỷ luật", "xử lý kỷ luật", "hình thức kỷ luật", "mức kỷ luật",
+            "ky luat dang vien", "ky luat", "xu ly ky luat", "hinh thuc ky luat", "muc ky luat",
+            # Specific documents
+            "quyết định 69", "quyết định 264", "qd 69", "qd 264", "thông tư 02", "tt 02",
+            "quyet dinh 69", "quyet dinh 264", "qd 69", "qd 264", "thong tu 02", "tt 02",
+            # Related terms
+            "quy định kỷ luật", "kỷ luật đảng", "kỷ luật cán bộ", "xử lý vi phạm",
+            "quy dinh ky luat", "ky luat dang", "ky luat can bo", "xu ly vi pham",
+            # Common question patterns about legal documents
+            "các hình thức", "hình thức", "cac hinh thuc", "hinh thuc",
+            "cho toi biet", "cho biet", "cho toi biết", "cho biết",
+        ]
+        
+        # Check if query contains legal keywords
         has_legal_keywords = any(
-            self._keyword_in(query_lower, query_ascii, kw) for kw in
-            ["quyết định", "quy định", "thông tư", "nghị quyết", "văn bản pháp luật", "văn bản quy phạm", "điều lệnh",
-             "kỷ luật đảng viên", "kỷ luật", "xử lý kỷ luật", "hình thức kỷ luật", "mức kỷ luật",
-             "quyết định 69", "quyết định 264", "qd 69", "qd 264", "thông tư 02", "tt 02",
-             "quy định kỷ luật", "kỷ luật đảng", "kỷ luật cán bộ", "xử lý vi phạm",
-             "quyet dinh", "quy dinh", "thong tu", "nghi quyet", "van ban phap luat", "van ban quy pham", "dieu lenh",
-             "ky luat dang vien", "ky luat", "xu ly ky luat", "hinh thuc ky luat", "muc ky luat",
-             "quyet dinh 69", "quyet dinh 264", "qd 69", "qd 264", "thong tu 02", "tt 02",
-             "quy dinh ky luat", "ky luat dang", "ky luat can bo", "xu ly vi pham"]
+            self._keyword_in(query_lower, query_ascii, kw) for kw in legal_keywords
         )
+        
+        # Special case: if query contains "kỷ luật" or "đảng viên" together, it's definitely legal
+        if (self._keyword_in(query_lower, query_ascii, "ky luat") or 
+            self._keyword_in(query_lower, query_ascii, "kỷ luật")) and (
+            self._keyword_in(query_lower, query_ascii, "dang vien") or
+            self._keyword_in(query_lower, query_ascii, "đảng viên") or
+            self._keyword_in(query_lower, query_ascii, "hinh thuc") or
+            self._keyword_in(query_lower, query_ascii, "hình thức")
+        ):
+            return ("search_legal", 0.95)  # Very high confidence
+        
         if has_legal_keywords:
             return ("search_legal", 0.85)
         
@@ -699,47 +722,13 @@ class Chatbot:
             return response
         
         # Try RAG pipeline first (if embeddings available)
-        # AUTO-RETRY: If general_query has no results, automatically try search_legal
         use_rag = True
-        auto_retry_intent = None
         try:
             from hue_portal.core.rag import rag_pipeline
             # Build context list for RAG
             rag_context = None
             if context_messages:
                 rag_context = context_messages
-            # First, try to retrieve documents without LLM to check if we have results
-            from hue_portal.core.rag import retrieve_top_k_documents
-            from hue_portal.core.config.hybrid_search_config import get_config
-            
-            # Map intent to content type for initial check
-            intent_to_type = {
-                'search_procedure': 'procedure',
-                'search_fine': 'fine',
-                'search_office': 'office',
-                'search_advisory': 'advisory',
-                'search_legal': 'legal',
-                'general_query': 'general',
-                'greeting': 'general',
-            }
-            initial_content_type = intent_to_type.get(intent, 'procedure')
-            
-            # Quick check: retrieve documents first (without LLM generation)
-            initial_docs = retrieve_top_k_documents(query, initial_content_type, top_k=5) if initial_content_type != 'general' else []
-            
-            # AUTO-RETRY: If general_query has no results, try search_legal automatically
-            if intent == "general_query" and len(initial_docs) == 0:
-                # Check if query might be about legal documents
-                legal_keywords = ["kỷ luật", "quyết định", "quy định", "thông tư", "đảng viên", "hình thức", "ky luat", "quyet dinh", "quy dinh", "thong tu", "dang vien", "hinh thuc"]
-                query_lower = query.lower()
-                if any(kw in query_lower for kw in legal_keywords):
-                    print(f"[AUTO-RETRY] general_query has no results, trying search_legal...", flush=True)
-                    retry_docs = retrieve_top_k_documents(query, 'legal', top_k=5)
-                    if len(retry_docs) > 0:
-                        intent = "search_legal"  # Update intent based on successful retry
-                        print(f"[AUTO-RETRY] ✅ Found {len(retry_docs)} results with search_legal", flush=True)
-            
-            # Now call RAG pipeline with correct intent to generate answer
             rag_result = rag_pipeline(query, intent, top_k=5, min_confidence=confidence, context=rag_context, use_llm=True)
             
             # Use RAG answer if available (even with count=0 for general conversation)
@@ -884,4 +873,3 @@ def get_chatbot() -> Chatbot:
     if _chatbot_instance is None:
         _chatbot_instance = Chatbot()
     return _chatbot_instance
-
