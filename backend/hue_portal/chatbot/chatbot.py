@@ -76,6 +76,17 @@ INTENT_TRAINING_DATA = {
         "lừa đảo online",
         "cảnh báo mạo danh"
     ],
+    "search_legal": [
+        "quyết định", "quy định", "thông tư", "nghị quyết",
+        "văn bản pháp luật", "văn bản quy phạm", "điều lệnh",
+        "kỷ luật đảng viên", "kỷ luật", "xử lý kỷ luật",
+        "quyết định 69", "quyết định 264", "qd 69", "qd 264",
+        "thông tư 02", "tt 02", "điều lệnh cand",
+        "quy định kỷ luật", "hình thức kỷ luật", "mức kỷ luật",
+        "xử lý vi phạm", "kỷ luật đảng", "kỷ luật cán bộ",
+        "quy định về", "theo quyết định", "theo thông tư",
+        "nội dung quyết định", "nội dung thông tư", "điều khoản"
+    ],
     "general_query": [
         "xin chào", "giúp tôi", "tư vấn", "hỏi",
         "thông tin", "tra cứu", "tìm kiếm"
@@ -628,11 +639,12 @@ class Chatbot:
         # Check advisory keywords first to avoid conflict with "công an" in office keywords
         has_advisory_keywords = any(kw in query_lower for kw in ["cảnh báo", "lừa đảo", "scam", "mạo danh", "thủ đoạn", "cảnh giác"])
         has_office_keywords = any(kw in query_lower for kw in ["địa chỉ", "công an", "số điện thoại", "giờ làm việc"])
+        has_legal_keywords = any(kw in query_lower for kw in ["quyết định", "quy định", "thông tư", "kỷ luật đảng viên", "kỷ luật", "qd 69", "qd 264", "thông tư 02", "điều lệnh", "văn bản pháp luật"])
         
         # Only treat as greeting if it's very short AND has no other keywords AND classified as greeting
         is_simple_greeting = (len(query_words) <= 3 and 
                              any(greeting in query_lower for greeting in ["xin chào", "chào", "hello", "hi"]) and
-                             not (has_fine_keywords or has_procedure_keywords or has_office_keywords or has_advisory_keywords))
+                             not (has_fine_keywords or has_procedure_keywords or has_office_keywords or has_advisory_keywords or has_legal_keywords))
         
         if is_simple_greeting and intent == "greeting":
             response = {
@@ -681,7 +693,8 @@ class Chatbot:
                 rag_context = context_messages
             rag_result = rag_pipeline(query, intent, top_k=5, min_confidence=confidence, context=rag_context, use_llm=True)
             
-            if rag_result["count"] > 0 and rag_result["confidence"] >= confidence:
+            # Use RAG answer if available (even with count=0 for general conversation)
+            if rag_result.get("answer") and (rag_result["count"] > 0 or rag_result.get("answer", "").strip()):
                 # Use RAG-generated answer
                 documents = rag_result["documents"][:5]
                 results = [
