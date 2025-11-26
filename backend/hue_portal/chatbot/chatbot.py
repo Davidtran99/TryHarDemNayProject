@@ -216,14 +216,22 @@ class Chatbot:
         model_intent, model_confidence = self._model_based_intent(query)
         keyword_intent, keyword_confidence = self._keyword_based_intent(query)
         
+        # PRIORITY: If keyword-based detects search_legal with high confidence, ALWAYS use it
+        # Legal queries are very specific and keyword matching is more reliable
+        if keyword_intent == "search_legal" and keyword_confidence >= 0.85:
+            return (keyword_intent, keyword_confidence)
+        
         chosen_intent = keyword_intent
         confidence = keyword_confidence
 
         # Nếu model tự tin và không mâu thuẫn với keyword, ưu tiên model
+        # BUT: Never override search_legal with general_query
         if model_intent and model_confidence >= 0.65:
             if keyword_intent in {model_intent, "general_query", "greeting"}:
-                chosen_intent = model_intent
-                confidence = max(confidence, model_confidence)
+                # Only override if keyword is not search_legal
+                if keyword_intent != "search_legal":
+                    chosen_intent = model_intent
+                    confidence = max(confidence, model_confidence)
         
         # Ensemble: combine model and keyword predictions
         if model_intent and keyword_intent:
@@ -232,8 +240,10 @@ class Chatbot:
                 confidence = min(1.0, (model_confidence + keyword_confidence) / 2 + 0.1)
             elif model_confidence > 0.7 and keyword_confidence < 0.6:
                 # Model is more confident - use model
-                chosen_intent = model_intent
-                confidence = model_confidence * 0.9  # Slight penalty for disagreement
+                # BUT: Never override search_legal
+                if keyword_intent != "search_legal":
+                    chosen_intent = model_intent
+                    confidence = model_confidence * 0.9  # Slight penalty for disagreement
 
         # Special handling for greeting - only if really simple
         if keyword_intent == "greeting":
@@ -416,39 +426,17 @@ class Chatbot:
             return ("search_office", 0.8)
         
         # Check legal keywords (check BEFORE advisory to avoid "công an" conflict)
-        # Expanded keywords to catch more variations, including partial matches
-        legal_keywords = [
-            # Văn bản pháp luật
-            "quyết định", "quy định", "thông tư", "nghị quyết", "văn bản pháp luật", "văn bản quy phạm", "điều lệnh",
-            "quyet dinh", "quy dinh", "thong tu", "nghi quyet", "van ban phap luat", "van ban quy pham", "dieu lenh",
-            # Kỷ luật đảng viên (various forms and partial matches)
-            "kỷ luật đảng viên", "kỷ luật", "xử lý kỷ luật", "hình thức kỷ luật", "mức kỷ luật",
-            "ky luat dang vien", "ky luat", "xu ly ky luat", "hinh thuc ky luat", "muc ky luat",
-            # Individual words that strongly indicate legal queries
-            "dang vien", "đảng viên", "hinh thuc", "hình thức", "cac hinh thuc", "các hình thức",
-            # Specific documents
-            "quyết định 69", "quyết định 264", "qd 69", "qd 264", "thông tư 02", "tt 02",
-            "quyet dinh 69", "quyet dinh 264", "qd 69", "qd 264", "thong tu 02", "tt 02",
-            # Related terms
-            "quy định kỷ luật", "kỷ luật đảng", "kỷ luật cán bộ", "xử lý vi phạm",
-            "quy dinh ky luat", "ky luat dang", "ky luat can bo", "xu ly vi pham",
-        ]
-        
         has_legal_keywords = any(
-            self._keyword_in(query_lower, query_ascii, kw) for kw in legal_keywords
+            self._keyword_in(query_lower, query_ascii, kw) for kw in
+            ["quyết định", "quy định", "thông tư", "nghị quyết", "văn bản pháp luật", "văn bản quy phạm", "điều lệnh",
+             "kỷ luật đảng viên", "kỷ luật", "xử lý kỷ luật", "hình thức kỷ luật", "mức kỷ luật",
+             "quyết định 69", "quyết định 264", "qd 69", "qd 264", "thông tư 02", "tt 02",
+             "quy định kỷ luật", "kỷ luật đảng", "kỷ luật cán bộ", "xử lý vi phạm",
+             "quyet dinh", "quy dinh", "thong tu", "nghi quyet", "van ban phap luat", "van ban quy pham", "dieu lenh",
+             "ky luat dang vien", "ky luat", "xu ly ky luat", "hinh thuc ky luat", "muc ky luat",
+             "quyet dinh 69", "quyet dinh 264", "qd 69", "qd 264", "thong tu 02", "tt 02",
+             "quy dinh ky luat", "ky luat dang", "ky luat can bo", "xu ly vi pham"]
         )
-        
-        # Special case: if query contains both "kỷ luật" and "đảng viên" (in any form), it's definitely legal
-        has_ky_luat = (self._keyword_in(query_lower, query_ascii, "ky luat") or 
-                       self._keyword_in(query_lower, query_ascii, "kỷ luật"))
-        has_dang_vien = (self._keyword_in(query_lower, query_ascii, "dang vien") or
-                         self._keyword_in(query_lower, query_ascii, "đảng viên"))
-        has_hinh_thuc = (self._keyword_in(query_lower, query_ascii, "hinh thuc") or
-                         self._keyword_in(query_lower, query_ascii, "hình thức"))
-        
-        if has_ky_luat and (has_dang_vien or has_hinh_thuc):
-            return ("search_legal", 0.95)  # Very high confidence
-        
         if has_legal_keywords:
             return ("search_legal", 0.85)
         
