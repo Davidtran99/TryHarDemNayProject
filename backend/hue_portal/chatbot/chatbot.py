@@ -699,7 +699,9 @@ class Chatbot:
             return response
         
         # Try RAG pipeline first (if embeddings available)
+        # AUTO-RETRY: If general_query has no results, automatically try search_legal
         use_rag = True
+        auto_retry_intent = None
         try:
             from hue_portal.core.rag import rag_pipeline
             # Build context list for RAG
@@ -707,6 +709,19 @@ class Chatbot:
             if context_messages:
                 rag_context = context_messages
             rag_result = rag_pipeline(query, intent, top_k=5, min_confidence=confidence, context=rag_context, use_llm=True)
+            
+            # AUTO-RETRY: If general_query has no results, try search_legal automatically
+            if intent == "general_query" and rag_result.get("count", 0) == 0:
+                # Check if query might be about legal documents
+                legal_keywords = ["kỷ luật", "quyết định", "quy định", "thông tư", "đảng viên", "ky luat", "quyet dinh", "quy dinh", "thong tu", "dang vien"]
+                query_lower = query.lower()
+                if any(kw in query_lower for kw in legal_keywords):
+                    print(f"[AUTO-RETRY] general_query has no results, trying search_legal...")
+                    auto_retry_intent = "search_legal"
+                    rag_result = rag_pipeline(query, "search_legal", top_k=5, min_confidence=0.3, context=rag_context, use_llm=True)
+                    if rag_result.get("count", 0) > 0:
+                        intent = "search_legal"  # Update intent based on successful retry
+                        print(f"[AUTO-RETRY] ✅ Found {rag_result.get('count')} results with search_legal")
             
             # Use RAG answer if available (even with count=0 for general conversation)
             if rag_result.get("answer") and (rag_result["count"] > 0 or rag_result.get("answer", "").strip()):
