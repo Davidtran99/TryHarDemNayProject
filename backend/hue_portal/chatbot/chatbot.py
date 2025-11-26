@@ -708,20 +708,29 @@ class Chatbot:
             rag_context = None
             if context_messages:
                 rag_context = context_messages
-            rag_result = rag_pipeline(query, intent, top_k=5, min_confidence=confidence, context=rag_context, use_llm=True)
+            rag_result = rag_pipeline(query, intent, top_k=5, min_confidence=confidence, context=rag_context, use_llm=False)  # Don't use LLM yet, check results first
             
             # AUTO-RETRY: If general_query has no results, try search_legal automatically
             if intent == "general_query" and rag_result.get("count", 0) == 0:
                 # Check if query might be about legal documents
-                legal_keywords = ["kỷ luật", "quyết định", "quy định", "thông tư", "đảng viên", "ky luat", "quyet dinh", "quy dinh", "thong tu", "dang vien"]
+                legal_keywords = ["kỷ luật", "quyết định", "quy định", "thông tư", "đảng viên", "hình thức", "ky luat", "quyet dinh", "quy dinh", "thong tu", "dang vien", "hinh thuc"]
                 query_lower = query.lower()
                 if any(kw in query_lower for kw in legal_keywords):
-                    print(f"[AUTO-RETRY] general_query has no results, trying search_legal...")
+                    print(f"[AUTO-RETRY] general_query has no results, trying search_legal...", flush=True)
                     auto_retry_intent = "search_legal"
                     rag_result = rag_pipeline(query, "search_legal", top_k=5, min_confidence=0.3, context=rag_context, use_llm=True)
                     if rag_result.get("count", 0) > 0:
                         intent = "search_legal"  # Update intent based on successful retry
-                        print(f"[AUTO-RETRY] ✅ Found {rag_result.get('count')} results with search_legal")
+                        print(f"[AUTO-RETRY] ✅ Found {rag_result.get('count')} results with search_legal", flush=True)
+                    else:
+                        # Retry failed, use original general_query result
+                        rag_result = rag_pipeline(query, "general_query", top_k=5, min_confidence=confidence, context=rag_context, use_llm=True)
+            elif rag_result.get("count", 0) == 0 and intent != "general_query":
+                # For other intents, if no results, generate answer with LLM
+                rag_result = rag_pipeline(query, intent, top_k=5, min_confidence=confidence, context=rag_context, use_llm=True)
+            elif rag_result.get("count", 0) > 0:
+                # If we have results, generate answer with LLM
+                rag_result = rag_pipeline(query, intent, top_k=5, min_confidence=confidence, context=rag_context, use_llm=True)
             
             # Use RAG answer if available (even with count=0 for general conversation)
             if rag_result.get("answer") and (rag_result["count"] > 0 or rag_result.get("answer", "").strip()):
