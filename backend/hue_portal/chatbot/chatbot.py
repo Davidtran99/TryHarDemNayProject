@@ -415,10 +415,25 @@ class Chatbot:
         if has_office_keywords:
             return ("search_office", 0.8)
         
+        # Check legal keywords (check BEFORE advisory to avoid "công an" conflict)
+        has_legal_keywords = any(
+            self._keyword_in(query_lower, query_ascii, kw) for kw in
+            ["quyết định", "quy định", "thông tư", "nghị quyết", "văn bản pháp luật", "văn bản quy phạm", "điều lệnh",
+             "kỷ luật đảng viên", "kỷ luật", "xử lý kỷ luật", "hình thức kỷ luật", "mức kỷ luật",
+             "quyết định 69", "quyết định 264", "qd 69", "qd 264", "thông tư 02", "tt 02",
+             "quy định kỷ luật", "kỷ luật đảng", "kỷ luật cán bộ", "xử lý vi phạm",
+             "quyet dinh", "quy dinh", "thong tu", "nghi quyet", "van ban phap luat", "van ban quy pham", "dieu lenh",
+             "ky luat dang vien", "ky luat", "xu ly ky luat", "hinh thuc ky luat", "muc ky luat",
+             "quyet dinh 69", "quyet dinh 264", "qd 69", "qd 264", "thong tu 02", "tt 02",
+             "quy dinh ky luat", "ky luat dang", "ky luat can bo", "xu ly vi pham"]
+        )
+        if has_legal_keywords:
+            return ("search_legal", 0.85)
+        
         # Only treat as greeting if it's VERY short (<= 3 words) and ONLY contains greeting words
         # AND does NOT contain any other keywords
         has_any_keyword = (has_fine_keywords or has_procedure_keywords or 
-                          has_office_keywords or has_advisory_keywords)
+                          has_office_keywords or has_advisory_keywords or has_legal_keywords)
         
         if (len(query_words) <= 3 and 
             any(self._keyword_in(query_lower, query_ascii, kw) for kw in ["xin chào", "chào", "hello", "hi", "xin chao", "chao"]) and
