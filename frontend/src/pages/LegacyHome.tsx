@@ -13,7 +13,6 @@ export default function LegacyHome() {
   return (
     <section className="hero">
       <div className="container">
-        <div className="pill">DỊCH VỤ ĐÔ THỊ THÔNG MINH T.T. HUẾ</div>
         <h1>Tra cứu thông tin</h1>
         <form className="search" action="/procedures">
           <Input

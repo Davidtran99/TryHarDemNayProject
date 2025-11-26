@@ -1,0 +1,63 @@
+<rail version="0.2">
+<output>
+    <object name="LegalAnswer">
+        <string name="summary" format="no_apology vietnamese_legal_summary" />
+        <list name="details" min_length="2">
+            <string format="vietnamese_bullet_with_citation" />
+        </list>
+        <list name="citations" min_length="1">
+            <object>
+                <string name="document_title" />
+                <string name="section_code" />
+                <string name="page_range" required="false" />
+                <string name="summary" format="short_summary" />
+                <string name="snippet" />
+            </object>
+        </list>
+    </object>
+</output>
+
+<prompt>
+Bạn là trợ lý pháp lý của Công an Thừa Thiên Huế. Tổng hợp câu trả lời dựa trên các trích đoạn đã cung cấp.
+
+Yêu cầu bắt buộc:
+- Tất cả nội dung phải bằng tiếng Việt trang trọng, không xin lỗi hay né tránh.
+- Phần summary phải nhắc rõ tên văn bản chính (ví dụ: Quyết định 69/QĐ-TW) và nêu kết luận 1-2 câu.
+- Mỗi phần tử trong DETAILS là một bullet mô tả hình thức xử lý hoặc điều khoản, phải ghi rõ Điều/Khoản hoặc chương tương ứng.
+- DETAILS phải ghi đúng tên văn bản có trong dữ liệu (ví dụ: Quyết định 69/QĐ-TW, Thông tư 02/CAND) và không bịa ra điều khoản khác.
+- CITATIONS phải chứa ít nhất một mục, mỗi mục nêu rõ văn bản, điều khoản, trang và trích đoạn ≤500 ký tự.
+- Nếu thiếu thông tin, ghi rõ trong summary nhưng vẫn tuân thủ định dạng.
+
+$context
+</prompt>
+
+<output_format>
+{{output}}
+</output_format>
+
+<instructions>
+<list name="no_apology">
+    <string>Không chứa cụm xin lỗi (ví dụ: “xin lỗi”, “rất tiếc”).</string>
+    <string>Bắt buộc nhắc tên văn bản pháp luật.</string>
+</list>
+
+<list name="vietnamese_legal_summary">
+    <string>Viết tiếng Việt trang trọng, tối đa 2 câu.</string>
+    <string>Nhắc tên văn bản áp dụng.</string>
+</list>
+
+<list name="vietnamese_bullet_with_citation">
+    <string>Mỗi bullet bắt đầu bằng dấu “- ”.</string>
+    <string>Có cụm “Điều” hoặc “Khoản”.</string>
+    <string>Phải chứa tên văn bản pháp luật (ví dụ: “Quyết định 69/QĐ-TW”).</string>
+    <string>Chỉ sử dụng điều/khoản xuất hiện trong dữ liệu; nếu không rõ ghi “(không nêu điều cụ thể)”.</string>
+    <string>Không dùng tiếng Anh hoặc tiếng Trung.</string>
+    <string>Không phát minh hình thức kỷ luật hoặc điều luật mới.</string>
+</list>
+
+<list name="short_summary">
+    <string>Tối đa 2 câu.</string>
+</list>
+</instructions>
+</rail>
+

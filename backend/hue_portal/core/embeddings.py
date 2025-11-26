@@ -14,17 +14,35 @@ except ImportError:
     SentenceTransformer = None
 
 # Available embedding models (ordered by preference for Vietnamese)
+# Models are ordered from fastest to best quality
 AVAILABLE_MODELS = {
-    "vietnamese-sbert": "keepitreal/vietnamese-sbert-v2",  # Vietnamese-specific, good quality
-    "multilingual-e5": "intfloat/multilingual-e5-large",  # Large, high quality, multilingual
-    "paraphrase-multilingual": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",  # Fast, good quality
-    "multilingual-mpnet": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",  # High quality, slower
+    # Fast models (384 dim) - Good for production
+    "paraphrase-multilingual": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",  # Fast, 384 dim
+    
+    # High quality models (768 dim) - Better accuracy
+    "multilingual-mpnet": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",  # High quality, 768 dim, recommended
+    "vietnamese-sbert": "keepitreal/vietnamese-sbert-v2",  # Vietnamese-specific (may require auth)
+    
+    # Very high quality models (1024+ dim) - Best accuracy but slower
+    "multilingual-e5-large": "intfloat/multilingual-e5-large",  # Very high quality, 1024 dim, large model
+    "multilingual-e5-base": "intfloat/multilingual-e5-base",  # High quality, 768 dim, balanced
+    
+    # Vietnamese-specific models (if available)
+    "vietnamese-embedding": "dangvantuan/vietnamese-embedding",  # Vietnamese-specific (if available)
+    "vietnamese-bi-encoder": "bkai-foundation-models/vietnamese-bi-encoder",  # Vietnamese bi-encoder (if available)
 }
 
 # Default embedding model for Vietnamese (can be overridden via env var)
+# Use multilingual-mpnet as default - better quality than MiniLM, still reasonable size
+# Can be set via EMBEDDING_MODEL env var (supports both short names and full model paths)
+# Examples:
+#   - EMBEDDING_MODEL=multilingual-mpnet (uses short name)
+#   - EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-mpnet-base-v2 (full path)
+#   - EMBEDDING_MODEL=/path/to/local/model (local model path)
+#   - EMBEDDING_MODEL=username/private-model (private HF model, requires HF_TOKEN)
 DEFAULT_MODEL_NAME = os.environ.get(
     "EMBEDDING_MODEL",
-    AVAILABLE_MODELS.get("vietnamese-sbert", "keepitreal/vietnamese-sbert-v2")
+    AVAILABLE_MODELS.get("multilingual-mpnet", "sentence-transformers/paraphrase-multilingual-mpnet-base-v2")
 )
 FALLBACK_MODEL_NAME = AVAILABLE_MODELS.get("paraphrase-multilingual", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
@@ -65,9 +83,31 @@ def get_embedding_model(model_name: Optional[str] = None, force_reload: bool = F
     # Load new model
     try:
         print(f"Loading embedding model: {resolved_model_name}")
-        _model_cache = SentenceTransformer(resolved_model_name)
+        
+        # Check if it's a local path
+        model_path = Path(resolved_model_name)
+        if model_path.exists() and model_path.is_dir():
+            # Local model path
+            print(f"Loading local model from: {resolved_model_name}")
+            _model_cache = SentenceTransformer(str(model_path))
+        else:
+            # Hugging Face model (public or private)
+            hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
+            model_kwargs = {}
+            if hf_token:
+                print(f"Using Hugging Face token for model: {resolved_model_name}")
+                model_kwargs["token"] = hf_token
+            # Public model (or token provided)
+            _model_cache = SentenceTransformer(resolved_model_name, **model_kwargs)
+        
         _cached_model_name = resolved_model_name
-        print(f"✅ Successfully loaded model: {resolved_model_name}")
+        # Get model dimension for info
+        try:
+            test_embedding = _model_cache.encode("test", show_progress_bar=False)
+            dim = len(test_embedding)
+            print(f"✅ Successfully loaded model: {resolved_model_name} (dimension: {dim})")
+        except Exception:
+            print(f"✅ Successfully loaded model: {resolved_model_name}")
         return _model_cache
     except Exception as e:
         print(f"❌ Error loading model {resolved_model_name}: {e}")
@@ -76,7 +116,9 @@ def get_embedding_model(model_name: Optional[str] = None, force_reload: bool = F
             try:
                 _model_cache = SentenceTransformer(FALLBACK_MODEL_NAME)
                 _cached_model_name = FALLBACK_MODEL_NAME
-                print(f"✅ Successfully loaded fallback model: {FALLBACK_MODEL_NAME}")
+                test_embedding = _model_cache.encode("test", show_progress_bar=False)
+                dim = len(test_embedding)
+                print(f"✅ Successfully loaded fallback model: {FALLBACK_MODEL_NAME} (dimension: {dim})")
                 return _model_cache
             except Exception as e2:
                 print(f"❌ Error loading fallback model: {e2}")

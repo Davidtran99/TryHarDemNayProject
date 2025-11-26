@@ -18,7 +18,7 @@ export default function PhoBanner() {
           </div>
           <div className="header-text">
             <div className="org-name">CÔNG AN THÀNH PHỐ Huế</div>
-            <div className="dept-name">PHÒNG HỒ SƠ NGHIỆP VỤ</div>
+            <div className="dept-name">PHÒNG THANH TRA</div>
             <div className="slogan">Vì bình yên cố đô- Vì nhân dân phục vụ</div>
           </div>
         </div>
@@ -43,9 +43,9 @@ export default function PhoBanner() {
           NHÂN VIÊN AI
         </button>
 
-        <h1 className="main-title">PHÒNG HỒ SƠ NGHIỆP VỤ</h1>
+        <h1 className="main-title">PHÒNG THANH TRA</h1>
         <p className="description">
-          Công dân cần hỗ trợ lý lịch tư pháp chúng tôi luôn sẵn sàng trả lời
+          Cẩm nang các văn bản quy định pháp luật về xử lí kỷ luật cán bộ đảng viên
         </p>
 
         <div className="bottom-section">

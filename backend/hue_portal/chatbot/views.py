@@ -98,6 +98,11 @@ def chat(request: Request) -> Response:
             "session_id": "uuid-string"
         }
     """
+    # Log raw request data for debugging
+    raw_data = dict(request.data) if hasattr(request.data, 'get') else {}
+    logger.info(f"[CHAT] 📥 Raw request data keys: {list(raw_data.keys())}, Content-Type: {request.content_type}")
+    print(f"[CHAT] 📥 Raw request data keys: {list(raw_data.keys())}, Content-Type: {request.content_type}", flush=True)
+    
     message = request.data.get("message", "").strip()
     session_id = request.data.get("session_id") or ""
     if session_id:

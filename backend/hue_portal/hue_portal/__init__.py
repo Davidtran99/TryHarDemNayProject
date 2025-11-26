@@ -3,7 +3,7 @@
 try:
     from .celery import app as celery_app
     __all__ = ["celery_app"]
-except (ImportError, AttributeError) as e:
+except (ImportError, AttributeError):
     # Celery not available or circular import - not needed for Space deployment
     celery_app = None
     __all__ = []

@@ -216,22 +216,14 @@ class Chatbot:
         model_intent, model_confidence = self._model_based_intent(query)
         keyword_intent, keyword_confidence = self._keyword_based_intent(query)
         
-        # CRITICAL: If keyword-based detects search_legal, NEVER let model override it
-        # Legal queries are very specific and keyword matching is more reliable than model
-        if keyword_intent == "search_legal" and keyword_confidence >= 0.85:
-            return (keyword_intent, keyword_confidence)
-        
         chosen_intent = keyword_intent
         confidence = keyword_confidence
 
         # Nếu model tự tin và không mâu thuẫn với keyword, ưu tiên model
-        # BUT: Never override search_legal
         if model_intent and model_confidence >= 0.65:
             if keyword_intent in {model_intent, "general_query", "greeting"}:
-                # Only override if keyword is not search_legal
-                if keyword_intent != "search_legal":
-                    chosen_intent = model_intent
-                    confidence = max(confidence, model_confidence)
+                chosen_intent = model_intent
+                confidence = max(confidence, model_confidence)
         
         # Ensemble: combine model and keyword predictions
         if model_intent and keyword_intent:
@@ -240,10 +232,8 @@ class Chatbot:
                 confidence = min(1.0, (model_confidence + keyword_confidence) / 2 + 0.1)
             elif model_confidence > 0.7 and keyword_confidence < 0.6:
                 # Model is more confident - use model
-                # BUT: Never override search_legal
-                if keyword_intent != "search_legal":
-                    chosen_intent = model_intent
-                    confidence = model_confidence * 0.9  # Slight penalty for disagreement
+                chosen_intent = model_intent
+                confidence = model_confidence * 0.9  # Slight penalty for disagreement
 
         # Special handling for greeting - only if really simple
         if keyword_intent == "greeting":

@@ -9,7 +9,16 @@ import sys
 import traceback
 import logging
 import time
-from typing import List, Dict, Any, Optional
+from pathlib import Path
+from typing import List, Dict, Any, Optional, Set, Tuple
+
+from .structured_legal import (
+    build_structured_legal_prompt,
+    get_legal_output_parser,
+    parse_structured_output,
+    LegalAnswer,
+)
+from .legal_guardrails import get_legal_guard
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -17,6 +26,79 @@ except ImportError:
     pass  # dotenv is optional
 
 logger = logging.getLogger(__name__)
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+GUARDRAILS_LOG_DIR = BASE_DIR / "logs" / "guardrails"
+GUARDRAILS_LOG_FILE = GUARDRAILS_LOG_DIR / "legal_structured.log"
+
+
+def _write_guardrails_debug(label: str, content: Optional[str]) -> None:
+    """Persist raw Guardrails inputs/outputs for debugging."""
+    if not content:
+        return
+    try:
+        GUARDRAILS_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        snippet = content.strip()
+        max_len = 4000
+        if len(snippet) > max_len:
+            snippet = snippet[:max_len] + "...[truncated]"
+        with GUARDRAILS_LOG_FILE.open("a", encoding="utf-8") as fp:
+            fp.write(f"[{timestamp}] [{label}] {snippet}\n{'-' * 80}\n")
+    except Exception as exc:
+        logger.debug("Unable to write guardrails log: %s", exc)
+
+
+def _collect_doc_metadata(documents: List[Any]) -> Tuple[Set[str], Set[str]]:
+    titles: Set[str] = set()
+    sections: Set[str] = set()
+    for doc in documents:
+        document = getattr(doc, "document", None)
+        title = getattr(document, "title", None)
+        if title:
+            titles.add(title.strip())
+        section_code = getattr(doc, "section_code", None)
+        if section_code:
+            sections.add(section_code.strip())
+    return titles, sections
+
+
+def _contains_any(text: str, tokens: Set[str]) -> bool:
+    if not tokens:
+        return True
+    normalized = text.lower()
+    return any(token.lower() in normalized for token in tokens if token)
+
+
+def _validate_structured_answer(
+    answer: "LegalAnswer",
+    documents: List[Any],
+) -> Tuple[bool, str]:
+    """Ensure structured answer references actual documents/sections."""
+    allowed_titles, allowed_sections = _collect_doc_metadata(documents)
+    if allowed_titles and not _contains_any(answer.summary, allowed_titles):
+        return False, "Summary thiếu tên văn bản từ bảng tham chiếu"
+
+    for idx, bullet in enumerate(answer.details, 1):
+        if allowed_titles and not _contains_any(bullet, allowed_titles):
+            return False, f"Chi tiết {idx} thiếu tên văn bản"
+        if allowed_sections and not _contains_any(bullet, allowed_sections):
+            return False, f"Chi tiết {idx} thiếu mã điều/khoản"
+
+    allowed_title_lower = {title.lower() for title in allowed_titles}
+    allowed_section_lower = {section.lower() for section in allowed_sections}
+
+    for idx, citation in enumerate(answer.citations, 1):
+        if citation.document_title and citation.document_title.lower() not in allowed_title_lower:
+            return False, f"Citation {idx} chứa văn bản không có trong nguồn"
+        if (
+            citation.section_code
+            and allowed_section_lower
+            and citation.section_code.lower() not in allowed_section_lower
+        ):
+            return False, f"Citation {idx} chứa điều/khoản không có trong nguồn"
+
+    return True, ""
 
 # Import download progress tracker (optional)
 try:
@@ -39,6 +121,9 @@ LLM_PROVIDER_NONE = "none"
 DEFAULT_LLM_PROVIDER = os.environ.get("DEFAULT_LLM_PROVIDER", LLM_PROVIDER_LOCAL).lower()
 env_provider = os.environ.get("LLM_PROVIDER", "").strip().lower()
 LLM_PROVIDER = env_provider or DEFAULT_LLM_PROVIDER
+LEGAL_STRUCTURED_MAX_ATTEMPTS = max(
+    1, int(os.environ.get("LEGAL_STRUCTURED_MAX_ATTEMPTS", "2"))
+)
 
 
 class LLMGenerator:
@@ -362,46 +447,8 @@ class LLMGenerator:
         if not self.is_available():
             return None
         
-        # Build prompt
         prompt = self._build_prompt(query, context, documents)
-        
-        try:
-            print(f"[LLM] Generating answer with provider: {self.provider}", flush=True)
-            logger.info(f"[LLM] Generating answer with provider: {self.provider}")
-            
-            if self.provider == LLM_PROVIDER_OPENAI:
-                result = self._generate_openai(prompt)
-            elif self.provider == LLM_PROVIDER_ANTHROPIC:
-                result = self._generate_anthropic(prompt)
-            elif self.provider == LLM_PROVIDER_OLLAMA:
-                result = self._generate_ollama(prompt)
-            elif self.provider == LLM_PROVIDER_HUGGINGFACE:
-                result = self._generate_huggingface(prompt)
-            elif self.provider == LLM_PROVIDER_LOCAL:
-                result = self._generate_local(prompt)
-            elif self.provider == LLM_PROVIDER_API:
-                # For API mode, send the full prompt (with documents) as the message
-                # This ensures HF Spaces receives all context from retrieved documents
-                result = self._generate_api(prompt, context)
-            else:
-                result = None
-            
-            if result:
-                print(f"[LLM] ✅ Answer generated successfully (length: {len(result)})", flush=True)
-                logger.info(f"[LLM] ✅ Answer generated successfully (length: {len(result)})")
-            else:
-                print(f"[LLM] ⚠️ No answer generated", flush=True)
-                logger.warning("[LLM] ⚠️ No answer generated")
-            
-            return result
-        except Exception as e:
-            error_trace = traceback.format_exc()
-            print(f"[LLM] ❌ Error generating answer: {e}", flush=True)
-            print(f"[LLM] ❌ Full trace: {error_trace}", flush=True)
-            logger.error(f"[LLM] ❌ Error generating answer: {e}\n{error_trace}")
-            print(f"[LLM] ❌ ERROR: {type(e).__name__}: {str(e)}", file=sys.stderr, flush=True)
-            traceback.print_exc(file=sys.stderr)
-            return None
+        return self._generate_from_prompt(prompt, context=context)
     
     def _build_prompt(
         self,
@@ -438,7 +485,11 @@ class LLMGenerator:
                 "Yêu cầu QUAN TRỌNG:",
                 "- CHỈ trả lời dựa trên thông tin trong 'Các văn bản/quy định liên quan' ở trên",
                 "- KHÔNG được tự tạo hoặc suy đoán thông tin không có trong tài liệu",
-                "- Nếu thông tin không đủ để trả lời, hãy nói rõ: 'Thông tin trong cơ sở dữ liệu chưa đủ để trả lời câu hỏi này'",
+                "- Khi đã có trích đoạn, phải tổng hợp theo cấu trúc rõ ràng:\n  1) Tóm tắt ngắn gọn nội dung chính\n  2) Liệt kê từng điều/khoản hoặc hình thức xử lý (dùng bullet/đánh số, ghi rõ Điều, Khoản, trang, tên văn bản)\n  3) Kết luận + khuyến nghị áp dụng.",
+                "- Luôn nhắc tên văn bản (ví dụ: Quyết định 69/QĐ-TW) và mã điều trong nội dung trả lời.",
+                "- Kết thúc phần trả lời bằng câu: '(Xem trích dẫn chi tiết bên dưới)'.",
+                "- Không dùng những câu chung chung như 'Rất tiếc' hay 'Tôi không thể giúp', hãy trả lời thẳng vào câu hỏi.",
+                "- Chỉ khi HOÀN TOÀN không có thông tin trong tài liệu mới được nói: 'Thông tin trong cơ sở dữ liệu chưa đủ để trả lời câu hỏi này'",
                 "- Nếu có mức phạt, phải ghi rõ số tiền (ví dụ: 200.000 - 400.000 VNĐ)",
                 "- Nếu có điều khoản, ghi rõ mã điều (ví dụ: Điều 5, Điều 10)",
                 "- Nếu có thủ tục, ghi rõ hồ sơ, lệ phí, thời hạn",
@@ -450,14 +501,171 @@ class LLMGenerator:
             # No documents - allow general conversation
             prompt_parts.extend([
                 "Yêu cầu:",
-                "- Trả lời câu hỏi một cách tự nhiên và hữu ích như một chatbot AI thông thường",
+                "- Trả lời câu hỏi một cách tự nhiên và hữu ích như một chatbot AI thông thường.",
+                "- Phản hồi phải có ít nhất 2 đoạn (mỗi đoạn ≥ 2 câu) và tổng cộng ≥ 6 câu.",
+                "- Luôn có ít nhất 1 danh sách bullet hoặc đánh số để người dùng dễ làm theo.",
+                "- Với chủ đề đời sống (ẩm thực, sức khỏe, du lịch, công nghệ...), hãy đưa ra gợi ý thật đầy đủ, gồm tối thiểu 4-6 câu hoặc 2 đoạn nội dung.",
+                "- Nếu câu hỏi cần công thức/nấu ăn: liệt kê NGUYÊN LIỆU rõ ràng (dạng bullet) và CÁC BƯỚC chi tiết (đánh số 1,2,3...). Đề xuất thêm mẹo hoặc biến tấu phù hợp.",
+                "- Với các chủ đề mẹo vặt khác, hãy chia nhỏ câu trả lời thành từng phần (Ví dụ: Bối cảnh → Các bước → Lưu ý).",
+                "- Tuyệt đối không mở đầu bằng lời xin lỗi hoặc từ chối; hãy đi thẳng vào nội dung chính.",
                 "- Nếu câu hỏi liên quan đến pháp luật, thủ tục, mức phạt nhưng không có thông tin trong cơ sở dữ liệu, hãy nói: 'Tôi không tìm thấy thông tin này trong cơ sở dữ liệu. Bạn có thể liên hệ trực tiếp với Công an Thừa Thiên Huế để được tư vấn chi tiết hơn.'",
-                "- Trả lời bằng tiếng Việt, thân thiện, ngắn gọn, dễ hiểu",
+                "- Giữ giọng điệu thân thiện, khích lệ, giống một người bạn hiểu biết.",
+                "- Trả lời bằng tiếng Việt, mạch lạc, dễ hiểu, ưu tiên trình bày có tiêu đề/phân đoạn để người đọc dễ làm theo.",
                 "",
                 "Trả lời:"
             ])
         
         return "\n".join(prompt_parts)
+
+    def _generate_from_prompt(
+        self,
+        prompt: str,
+        context: Optional[List[Dict[str, Any]]] = None
+    ) -> Optional[str]:
+        """Run current provider with a fully formatted prompt."""
+        if not self.is_available():
+            return None
+
+        try:
+            print(f"[LLM] Generating answer with provider: {self.provider}", flush=True)
+            logger.info(f"[LLM] Generating answer with provider: {self.provider}")
+
+            if self.provider == LLM_PROVIDER_OPENAI:
+                result = self._generate_openai(prompt)
+            elif self.provider == LLM_PROVIDER_ANTHROPIC:
+                result = self._generate_anthropic(prompt)
+            elif self.provider == LLM_PROVIDER_OLLAMA:
+                result = self._generate_ollama(prompt)
+            elif self.provider == LLM_PROVIDER_HUGGINGFACE:
+                result = self._generate_huggingface(prompt)
+            elif self.provider == LLM_PROVIDER_LOCAL:
+                result = self._generate_local(prompt)
+            elif self.provider == LLM_PROVIDER_API:
+                result = self._generate_api(prompt, context)
+            else:
+                result = None
+
+            if result:
+                print(
+                    f"[LLM] ✅ Answer generated successfully (length: {len(result)})",
+                    flush=True,
+                )
+                logger.info(
+                    f"[LLM] ✅ Answer generated successfully (length: {len(result)})"
+                )
+            else:
+                print(f"[LLM] ⚠️ No answer generated", flush=True)
+                logger.warning("[LLM] ⚠️ No answer generated")
+
+            return result
+        except Exception as exc:
+            error_trace = traceback.format_exc()
+            print(f"[LLM] ❌ Error generating answer: {exc}", flush=True)
+            print(f"[LLM] ❌ Full trace: {error_trace}", flush=True)
+            logger.error(f"[LLM] ❌ Error generating answer: {exc}\n{error_trace}")
+            print(
+                f"[LLM] ❌ ERROR: {type(exc).__name__}: {str(exc)}",
+                file=sys.stderr,
+                flush=True,
+            )
+            traceback.print_exc(file=sys.stderr)
+            return None
+    
+    def generate_structured_legal_answer(
+        self,
+        query: str,
+        documents: List[Any],
+        prefill_summary: Optional[str] = None,
+    ) -> Optional[LegalAnswer]:
+        """
+        Ask the LLM for a structured legal answer (summary + details + citations).
+        """
+        if not self.is_available() or not documents:
+            return None
+
+        parser = get_legal_output_parser()
+        guard = get_legal_guard()
+        retry_hint: Optional[str] = None
+        failure_reason: Optional[str] = None
+
+        for attempt in range(LEGAL_STRUCTURED_MAX_ATTEMPTS):
+            prompt = build_structured_legal_prompt(
+                query,
+                documents,
+                parser,
+                prefill_summary=prefill_summary,
+                retry_hint=retry_hint,
+            )
+            logger.debug(
+                "[LLM] Structured prompt preview (attempt %s): %s",
+                attempt + 1,
+                prompt[:600].replace("\n", " "),
+            )
+            raw_output = self._generate_from_prompt(prompt)
+
+            if not raw_output:
+                failure_reason = "LLM không trả lời"
+                retry_hint = (
+                    "Lần trước bạn không trả về JSON nào. "
+                    "Hãy in duy nhất một JSON với SUMMARY, DETAILS và CITATIONS."
+                )
+                continue
+
+            _write_guardrails_debug(
+                f"raw_output_attempt_{attempt + 1}",
+                raw_output,
+            )
+            structured: Optional[LegalAnswer] = None
+
+            try:
+                guard_result = guard.parse(llm_output=raw_output)
+                guarded_output = getattr(guard_result, "validated_output", None)
+                if guarded_output:
+                    structured = LegalAnswer.parse_obj(guarded_output)
+                    _write_guardrails_debug(
+                        f"guard_validated_attempt_{attempt + 1}",
+                        json.dumps(guarded_output, ensure_ascii=False),
+                    )
+            except Exception as exc:
+                failure_reason = f"Guardrails: {exc}"
+                logger.warning("[LLM] Guardrails validation failed: %s", exc)
+                _write_guardrails_debug(
+                    f"guard_error_attempt_{attempt + 1}",
+                    f"{type(exc).__name__}: {exc}",
+                )
+
+            if not structured:
+                structured = parse_structured_output(parser, raw_output or "")
+                if structured:
+                    _write_guardrails_debug(
+                        f"parser_recovery_attempt_{attempt + 1}",
+                        structured.json(ensure_ascii=False),
+                    )
+                else:
+                    retry_hint = (
+                        "JSON chưa hợp lệ. Hãy dùng cấu trúc SUMMARY/DETAILS/CITATIONS như ví dụ."
+                    )
+                    continue
+
+            is_valid, validation_reason = _validate_structured_answer(structured, documents)
+            if is_valid:
+                return structured
+
+            failure_reason = validation_reason or "Không đạt yêu cầu kiểm tra nội dung"
+            logger.warning(
+                "[LLM] ❌ Structured answer failed validation: %s", failure_reason
+            )
+            retry_hint = (
+                f"Lần trước vi phạm: {failure_reason}. "
+                "Hãy dùng đúng tên văn bản và mã điều trong bảng tham chiếu, không bịa thông tin mới."
+            )
+
+        logger.warning(
+            "[LLM] ❌ Structured legal parsing failed sau %s lần. Lý do cuối: %s",
+            LEGAL_STRUCTURED_MAX_ATTEMPTS,
+            failure_reason,
+        )
+        return None
     
     def _format_document(self, doc: Any) -> str:
         """Format document for prompt."""
@@ -507,9 +715,12 @@ class LLMGenerator:
                 if hasattr(doc_obj, 'code'):
                     parts.append(f"Mã văn bản: {doc_obj.code}")
             if hasattr(doc, 'content') and doc.content:
-                # Truncate content to 300 chars for prompt
-                content_short = doc.content[:300] + "..." if len(doc.content) > 300 else doc.content
-                parts.append(f"Nội dung: {content_short}")
+                # Provide longer snippet so LLM has enough context (up to ~1500 chars)
+                max_len = 1500
+                snippet = doc.content[:max_len].strip()
+                if len(doc.content) > max_len:
+                    snippet += "..."
+                parts.append(f"Nội dung: {snippet}")
             return " | ".join(parts) if parts else str(doc)
         
         return str(doc)
@@ -663,8 +874,8 @@ class LLMGenerator:
                     do_sample=True,
                     use_cache=True,  # Enable KV cache for faster generation
                     pad_token_id=self.local_tokenizer.eos_token_id,
-                    repetition_penalty=1.1,  # Prevent repetition
-                    early_stopping=True  # Stop early if EOS token is generated
+                    repetition_penalty=1.1  # Prevent repetition
+                    # Removed early_stopping (only works with num_beams > 1)
                 )
             
             # Decode

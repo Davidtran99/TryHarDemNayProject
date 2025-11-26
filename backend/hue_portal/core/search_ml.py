@@ -152,6 +152,8 @@ def search_with_ml(
                 content_type = 'office'
             elif 'advisory' in model_name:
                 content_type = 'advisory'
+            elif 'legalsection' in model_name:
+                content_type = 'legal'
             
             config = get_config(content_type)
             return search_with_hybrid(

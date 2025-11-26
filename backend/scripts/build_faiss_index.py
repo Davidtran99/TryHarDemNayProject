@@ -10,22 +10,35 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 BACKEND_DIR = ROOT_DIR / "backend"
 HUE_PORTAL_DIR = BACKEND_DIR / "hue_portal"
 
-for path in (HUE_PORTAL_DIR, BACKEND_DIR, ROOT_DIR):
-    if str(path) not in sys.path:
-        sys.path.insert(0, str(path))
+# Add backend directory to sys.path so Django can find hue_portal package
+# Django needs to import hue_portal.hue_portal.settings, so backend/ must be in path
+# IMPORTANT: Only add BACKEND_DIR, not HUE_PORTAL_DIR, because Django needs to find
+# the hue_portal package (which is in backend/hue_portal), not the hue_portal directory itself
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+# Add root for other imports if needed (but not HUE_PORTAL_DIR as it breaks Django imports)
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "hue_portal.hue_portal.settings")
 
 import django
 django.setup()
 
-from hue_portal.core.models import Procedure, Fine, Office, Advisory
+from hue_portal.core.models import (
+    Procedure,
+    Fine,
+    Office,
+    Advisory,
+    LegalSection,
+)
 from hue_portal.core.faiss_index import build_faiss_index_for_model
 
 
 def main():
     parser = argparse.ArgumentParser(description="Build FAISS indexes for models")
-    parser.add_argument("--model", choices=["procedure", "fine", "office", "advisory", "all"],
+    parser.add_argument("--model", choices=["procedure", "fine", "office", "advisory", "legal", "all"],
                        default="all", help="Which model to process")
     parser.add_argument("--index-type", choices=["Flat", "IVF", "HNSW"], default="IVF",
                        help="Type of FAISS index")
@@ -42,6 +55,7 @@ def main():
             (Fine, "Fine"),
             (Office, "Office"),
             (Advisory, "Advisory"),
+            (LegalSection, "LegalSection"),
         ]
     else:
         model_map = {
@@ -49,6 +63,7 @@ def main():
             "fine": (Fine, "Fine"),
             "office": (Office, "Office"),
             "advisory": (Advisory, "Advisory"),
+            "legal": (LegalSection, "LegalSection"),
         }
         if args.model in model_map:
             models_to_process = [model_map[args.model]]

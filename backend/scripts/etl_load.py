@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import django
-from pydantic import BaseModel, ValidationError, validator
+from pydantic import BaseModel, ValidationError, field_validator
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -17,9 +17,16 @@ DEFAULT_DATA_DIR = ROOT_DIR / "tài nguyên"
 DATA_DIR = Path(os.environ.get("ETL_DATA_DIR", DEFAULT_DATA_DIR))
 LOG_DIR = ROOT_DIR / "backend" / "logs" / "data_quality"
 
-for path in (HUE_PORTAL_DIR, BACKEND_DIR, ROOT_DIR):
-    if str(path) not in sys.path:
-        sys.path.insert(0, str(path))
+# Add backend directory to sys.path so Django can find hue_portal package
+# Django needs to import hue_portal.hue_portal.settings, so backend/ must be in path
+# IMPORTANT: Only add BACKEND_DIR, not HUE_PORTAL_DIR, because Django needs to find
+# the hue_portal package (which is in backend/hue_portal), not the hue_portal directory itself
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+# Add root for other imports if needed (but not HUE_PORTAL_DIR as it breaks Django imports)
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "hue_portal.hue_portal.settings")
 django.setup()
@@ -42,7 +49,8 @@ class OfficeRecord(BaseModel):
     service_scope: Optional[str] = ""
     updated_at: Optional[datetime]
 
-    @validator("unit_name")
+    @field_validator("unit_name")
+    @classmethod
     def unit_name_not_blank(cls, value: str) -> str:
         if not value:
             raise ValueError("unit_name is required")
@@ -61,7 +69,8 @@ class FineRecord(BaseModel):
     source_url: Optional[str] = ""
     updated_at: Optional[datetime]
 
-    @validator("violation_code")
+    @field_validator("violation_code")
+    @classmethod
     def code_not_blank(cls, value: str) -> str:
         if not value:
             raise ValueError("violation_code is required")
@@ -80,7 +89,8 @@ class ProcedureRecord(BaseModel):
     source_url: Optional[str] = ""
     updated_at: Optional[datetime]
 
-    @validator("title")
+    @field_validator("title")
+    @classmethod
     def title_not_blank(cls, value: str) -> str:
         if not value:
             raise ValueError("title is required")
@@ -93,13 +103,15 @@ class AdvisoryRecord(BaseModel):
     source_url: Optional[str] = ""
     published_at: Optional[date]
 
-    @validator("title")
+    @field_validator("title")
+    @classmethod
     def title_not_blank(cls, value: str) -> str:
         if not value:
             raise ValueError("title is required")
         return value
 
-    @validator("summary")
+    @field_validator("summary")
+    @classmethod
     def summary_not_blank(cls, value: str) -> str:
         if not value:
             raise ValueError("summary is required")
@@ -354,4 +366,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

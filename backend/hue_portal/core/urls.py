@@ -12,5 +12,14 @@ urlpatterns = [
     path("offices/<int:pk>/", views.offices_detail),
     path("advisories/", views.advisories_list),
     path("advisories/<int:pk>/", views.advisories_detail),
+    path("legal-sections/", views.legal_sections_list),
+    path("legal-sections/<int:pk>/", views.legal_sections_detail),
+    path(
+        "legal-documents/<int:pk>/download/",
+        views.legal_document_download,
+        name="legal-document-download",
+    ),
+    path("legal-documents/upload/", views.legal_document_upload),
+    path("legal-ingestion-jobs/", views.legal_ingestion_job_list),
+    path("legal-ingestion-jobs/<uuid:job_id>/", views.legal_ingestion_job_detail),
 ]
-

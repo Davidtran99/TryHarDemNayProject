@@ -1,0 +1,55 @@
+[
+  {
+    "code": "QD-69-TW",
+    "title": "Quyết định 69 về kỷ luật đảng viên",
+    "doc_type": "decision",
+    "issued_by": "Ban Chấp hành Trung ương",
+    "issued_at": "2017-12-22",
+    "source_file": "tài nguyên/QD-69-TW về kỷ luật đảng viên.pdf",
+    "source_url": "",
+    "summary": "Quy định xử lý kỷ luật đối với đảng viên vi phạm.",
+    "metadata": {
+      "notes": "Tài liệu PDF gốc"
+    }
+  },
+  {
+    "code": "TT-02-CAND",
+    "title": "Thông tư 02 về xử lý điều lệnh trong CAND",
+    "doc_type": "circular",
+    "issued_by": "Bộ Công An",
+    "issued_at": "2023-01-15",
+    "source_file": "tài nguyên/THÔNG TƯ 02 VỀ XỬ LÝ ĐIỀU LỆNH TRONG CAND.docx",
+    "source_url": "",
+    "summary": "Quy định chi tiết điều lệnh đối với lực lượng Công an nhân dân.",
+    "metadata": {
+      "notes": "DOCX, cần trích Điều/Mục"
+    }
+  },
+  {
+    "code": "TT-02-BIEN-SOAN",
+    "title": "Biên soạn hướng dẫn thông tư 02",
+    "doc_type": "guideline",
+    "issued_by": "Ban soạn thảo",
+    "issued_at": "2023-02-01",
+    "source_file": "tài nguyên/1. BIÊN SOẠN THÔNG TƯ 02.docx",
+    "source_url": "",
+    "summary": "Tài liệu biên soạn giải thích nội dung Thông tư 02.",
+    "metadata": {
+      "notes": "Tài liệu tham khảo"
+    }
+  },
+  {
+    "code": "264-QD-TW",
+    "title": "Quyết định 264 sửa đổi bổ sung QĐ 69 về kỷ luật đảng viên",
+    "doc_type": "decision",
+    "issued_by": "Ban Chấp hành Trung ương",
+    "issued_at": "2020-01-01",
+    "source_file": "tài nguyên/264-QD_TW_644732 sửa đổi bổ sung QĐ 69 về kỷ luật đảng viên.doc",
+    "source_url": "",
+    "summary": "Quyết định sửa đổi, bổ sung Quyết định 69 về kỷ luật đảng viên.",
+    "metadata": {
+      "notes": "Tài liệu sửa đổi bổ sung"
+    }
+  }
+]
+

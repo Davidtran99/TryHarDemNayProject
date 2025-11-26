@@ -1,9 +1,24 @@
+import json
+from django.conf import settings
 from django.db.models.functions import Lower
 from django.db.models import Q
-from rest_framework.decorators import api_view
+from django.http import FileResponse, Http404
+from django.shortcuts import get_object_or_404
+from pathlib import Path
+from rest_framework.decorators import api_view, parser_classes
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
-from .models import Procedure, Fine, Office, Advisory, Synonym
-from .serializers import ProcedureSerializer, FineSerializer, OfficeSerializer, AdvisorySerializer
+from .models import Procedure, Fine, Office, Advisory, LegalSection, LegalDocument, Synonym, IngestionJob
+from .serializers import (
+    ProcedureSerializer,
+    FineSerializer,
+    OfficeSerializer,
+    AdvisorySerializer,
+    LegalSectionSerializer,
+    LegalDocumentSerializer,
+    IngestionJobSerializer,
+)
+from .services import enqueue_ingestion_job
 from .search_ml import search_with_ml
 # Chatbot moved to hue_portal.chatbot app
 # Keeping import for backward compatibility
@@ -71,6 +86,17 @@ def search(request):
       results.append({
         "type": "advisory",
         "data": AdvisorySerializer(obj).data,
+        "relevance": getattr(obj, '_ml_score', 0.5)
+      })
+
+  if not type_ or type_ == "legal":
+    legal_qs = LegalSection.objects.select_related("document").all()
+    legal_text_fields = ["section_title", "section_code", "content"]
+    legal_results = search_with_ml(legal_qs, q, legal_text_fields, top_k=10, min_score=0.1)
+    for obj in legal_results:
+      results.append({
+        "type": "legal",
+        "data": LegalSectionSerializer(obj, context={"request": request}).data,
         "relevance": getattr(obj, '_ml_score', 0.5)
       })
   
@@ -162,6 +188,115 @@ def advisories_detail(request, pk:int):
   except Advisory.DoesNotExist:
     return Response(status=404)
   return Response(AdvisorySerializer(obj).data)
+
+@api_view(["GET"])
+def legal_sections_list(request):
+  q = normalize_query(request.GET.get("q", ""))
+  document_code = request.GET.get("document_code")
+  section_code = request.GET.get("section_code")
+  qs = LegalSection.objects.select_related("document").all()
+  if document_code:
+    qs = qs.filter(document__code__iexact=document_code)
+  if section_code:
+    qs = qs.filter(section_code__icontains=section_code)
+  if q:
+    text_fields = ["section_title", "section_code", "content"]
+    qs = search_with_ml(qs, q, text_fields, top_k=100, min_score=0.1)
+  return Response(LegalSectionSerializer(qs[:100], many=True, context={"request": request}).data)
+
+@api_view(["GET"])
+def legal_sections_detail(request, pk:int):
+  try:
+    obj = LegalSection.objects.select_related("document").get(pk=pk)
+  except LegalSection.DoesNotExist:
+    return Response(status=404)
+  return Response(LegalSectionSerializer(obj, context={"request": request}).data)
+
+@api_view(["GET"])
+def legal_document_download(request, pk:int):
+  try:
+    doc = LegalDocument.objects.get(pk=pk)
+  except LegalDocument.DoesNotExist:
+    raise Http404("Document not found")
+  if not doc.source_file:
+    raise Http404("Document missing source file")
+  file_path = Path(doc.source_file)
+  if not file_path.exists():
+    raise Http404("Source file not found on server")
+  response = FileResponse(open(file_path, "rb"), as_attachment=True, filename=file_path.name)
+  return response
+
+
+def _has_upload_access(request):
+  if getattr(request, "user", None) and request.user.is_authenticated:
+    return True
+  expected = getattr(settings, "LEGAL_UPLOAD_TOKEN", "")
+  header_token = request.headers.get("X-Upload-Token")
+  return bool(expected and header_token and header_token == expected)
+
+
+@api_view(["POST"])
+@parser_classes([MultiPartParser, FormParser])
+def legal_document_upload(request):
+  if not _has_upload_access(request):
+    return Response({"error": "unauthorized"}, status=403)
+
+  upload = request.FILES.get("file")
+  if not upload:
+    return Response({"error": "file is required"}, status=400)
+
+  code = (request.data.get("code") or "").strip()
+  if not code:
+    return Response({"error": "code is required"}, status=400)
+
+  metadata = {
+    "code": code,
+    "title": request.data.get("title") or code,
+    "doc_type": request.data.get("doc_type", "other"),
+    "summary": request.data.get("summary", ""),
+    "issued_by": request.data.get("issued_by", ""),
+    "issued_at": request.data.get("issued_at"),
+    "source_url": request.data.get("source_url", ""),
+    "mime_type": request.data.get("mime_type") or getattr(upload, "content_type", ""),
+    "metadata": {},
+  }
+  extra_meta = request.data.get("metadata")
+  if extra_meta:
+    try:
+      metadata["metadata"] = json.loads(extra_meta) if isinstance(extra_meta, str) else extra_meta
+    except Exception:
+      return Response({"error": "metadata must be valid JSON"}, status=400)
+
+  try:
+    job = enqueue_ingestion_job(
+      file_obj=upload,
+      filename=upload.name,
+      metadata=metadata,
+    )
+  except ValueError as exc:
+    return Response({"error": str(exc)}, status=400)
+  except Exception as exc:
+    return Response({"error": str(exc)}, status=500)
+
+  serialized = IngestionJobSerializer(job, context={"request": request}).data
+  return Response(serialized, status=202)
+
+
+@api_view(["GET"])
+def legal_ingestion_job_detail(request, job_id):
+  job = get_object_or_404(IngestionJob, id=job_id)
+  return Response(IngestionJobSerializer(job, context={"request": request}).data)
+
+
+@api_view(["GET"])
+def legal_ingestion_job_list(request):
+  code = request.GET.get("code")
+  qs = IngestionJob.objects.all()
+  if code:
+    qs = qs.filter(code=code)
+  qs = qs.order_by("-created_at")[:20]
+  serializer = IngestionJobSerializer(qs, many=True, context={"request": request})
+  return Response(serializer.data)
 
 @api_view(["POST"])
 def chat(request):

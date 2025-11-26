@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 import environ
 
@@ -59,23 +60,122 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "hue_portal.hue_portal.wsgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": env("POSTGRES_DB", default="hue_portal"),
-        "USER": env("POSTGRES_USER", default="hue"),
-        "PASSWORD": env("POSTGRES_PASSWORD", default="huepass"),
-        "HOST": env("POSTGRES_HOST", default="db"),
-        "PORT": env("POSTGRES_PORT", default="5432"),
-    }
-}
+def _mask(value: str) -> str:
+    if not value:
+        return ""
+    return value[:4] + "***"
 
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": env("REDIS_URL", default="redis://localhost:6379/0"),
+database_url = env("DATABASE_URL", default=None)
+
+if database_url:
+    DATABASES = {"default": env.db("DATABASE_URL")}
+    masked = database_url.replace(env("POSTGRES_PASSWORD", default=""), "***")
+    print(f"[DB] Using DATABASE_URL: {masked}", flush=True)
+else:
+    print("[DB] DATABASE_URL not provided – thử kết nối qua POSTGRES_* / tunnel.", flush=True)
+try:
+    import psycopg2
+
+        host = env("POSTGRES_HOST", default="localhost")
+        port = env("POSTGRES_PORT", default="5543")
+        user = env("POSTGRES_USER", default="hue")
+        password = env("POSTGRES_PASSWORD", default="huepass")
+        database = env("POSTGRES_DB", default="hue_portal")
+
+        last_error = None
+        for attempt in range(1, 4):
+            try:
+    test_conn = psycopg2.connect(
+                    host=host,
+                    port=port,
+                    user=user,
+                    password=password,
+                    database=database,
+                    connect_timeout=3,
+    )
+    test_conn.close()
+                last_error = None
+                break
+            except psycopg2.OperationalError as exc:
+                last_error = exc
+                print(
+                    f"[DB] Attempt {attempt}/3 failed to reach PostgreSQL ({exc}).",
+                    flush=True,
+                )
+                time.sleep(1)
+
+        if last_error:
+            raise last_error
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+                "NAME": database,
+                "USER": user,
+                "PASSWORD": password,
+                "HOST": host,
+                "PORT": port,
+            }
+        }
+        print(
+            f"[DB] Connected to PostgreSQL at {host}:{port} as {_mask(user)}",
+            flush=True,
+        )
+    except Exception as db_error:
+        print(
+            f"[DB] ⚠️ Falling back to SQLite because PostgreSQL is unavailable ({db_error})",
+            flush=True,
+        )
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
     }
-}
+
+# Cache configuration: opt-in Redis, otherwise safe local cache
+USE_REDIS_CACHE = env.bool("ENABLE_REDIS_CACHE", default=False)
+_redis_configured = False
+
+if USE_REDIS_CACHE:
+    try:
+        import redis
+        from urllib.parse import urlparse
+
+        redis_url = env("REDIS_URL", default="redis://localhost:6380/0")
+        parsed = urlparse(redis_url)
+        test_client = redis.Redis(
+            host=parsed.hostname or "localhost",
+            port=parsed.port or 6380,
+            username=parsed.username,
+            password=parsed.password,
+            db=int(parsed.path.lstrip("/") or 0),
+            socket_connect_timeout=1,
+        )
+        test_client.ping()
+        test_client.close()
+
+        CACHES = {
+            "default": {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": redis_url,
+            }
+        }
+        _redis_configured = True
+        print(f"[CACHE] ✅ Using Redis cache at {redis_url}", flush=True)
+    except Exception as redis_error:
+        print(f"[CACHE] ⚠️ Redis unavailable ({redis_error}), falling back to local cache.", flush=True)
+
+if not _redis_configured:
+    # LocMemCache keeps throttling functional without external services
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "hue-portal-default-cache",
+        }
+    }
+    # Reduce throttling aggressiveness failures by ensuring predictable cache
+    print("[CACHE] ℹ️ Using in-memory cache (LocMemCache).", flush=True)
 
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],

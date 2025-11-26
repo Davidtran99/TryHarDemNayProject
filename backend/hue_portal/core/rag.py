@@ -1,10 +1,14 @@
 """
 RAG (Retrieval-Augmented Generation) pipeline for answer generation.
 """
+import re
+import unicodedata
 from typing import List, Dict, Any, Optional
 from .hybrid_search import hybrid_search
-from .models import Procedure, Fine, Office, Advisory
+from .models import Procedure, Fine, Office, Advisory, LegalSection
 from hue_portal.chatbot.chatbot import format_fine_amount
+from hue_portal.chatbot.llm_integration import get_llm_generator
+from hue_portal.chatbot.structured_legal import format_structured_legal_answer
 
 
 def retrieve_top_k_documents(
@@ -36,6 +40,9 @@ def retrieve_top_k_documents(
     elif content_type == 'advisory':
         queryset = Advisory.objects.all()
         text_fields = ['title', 'summary']
+    elif content_type == 'legal':
+        queryset = LegalSection.objects.select_related("document").all()
+        text_fields = ['section_title', 'section_code', 'content']
     else:
         return []
     
@@ -78,20 +85,55 @@ def generate_answer_template(
     Returns:
         Generated answer text.
     """
-    if not documents:
-        return f"Xin lỗi, tôi không tìm thấy thông tin liên quan đến '{query}'. Vui lòng thử lại với từ khóa khác."
-    
-    # Try LLM generation first if enabled
-    if use_llm:
+    def _invoke_llm(documents_for_prompt: List[Any]) -> Optional[str]:
+        """Call configured LLM provider safely."""
         try:
+            import traceback
             from hue_portal.chatbot.llm_integration import get_llm_generator
+
             llm = get_llm_generator()
-            if llm:
-                llm_answer = llm.generate_answer(query, context=context, documents=documents)
-                if llm_answer:
-                    return llm_answer
-        except Exception as e:
-            print(f"LLM generation failed, using template: {e}")
+            if not llm:
+                print("[RAG] ⚠️ LLM not available, using template", flush=True)
+                return None
+
+            print(f"[RAG] Using LLM provider: {llm.provider}", flush=True)
+            llm_answer = llm.generate_answer(
+                query,
+                context=context,
+                documents=documents_for_prompt
+            )
+            if llm_answer:
+                print(f"[RAG] ✅ LLM answer generated (length: {len(llm_answer)})", flush=True)
+                return llm_answer
+
+            print("[RAG] ⚠️ LLM returned None, using template", flush=True)
+        except Exception as exc:
+            import traceback
+
+            error_trace = traceback.format_exc()
+            print(f"[RAG] ❌ LLM generation failed, using template: {exc}", flush=True)
+            print(f"[RAG] ❌ Trace: {error_trace}", flush=True)
+        return None
+
+    llm_enabled = use_llm or content_type == 'general'
+    if llm_enabled:
+        llm_documents = documents if documents else []
+        llm_answer = _invoke_llm(llm_documents)
+        if llm_answer:
+            return llm_answer
+    
+    # If no documents, fall back gracefully
+    if not documents:
+        if content_type == 'general':
+            return (
+                f"Tôi chưa có dữ liệu pháp luật liên quan đến '{query}', "
+                "nhưng vẫn sẵn sàng trò chuyện hoặc hỗ trợ bạn ở chủ đề khác. "
+                "Bạn có thể mô tả cụ thể hơn để tôi giúp tốt hơn nhé!"
+            )
+        return (
+            f"Xin lỗi, tôi không tìm thấy thông tin liên quan đến '{query}' trong cơ sở dữ liệu. "
+            "Vui lòng thử lại với từ khóa khác hoặc liên hệ trực tiếp với Công an Thừa Thiên Huế để được tư vấn."
+        )
     
     # Fallback to template-based generation
     if content_type == 'procedure':
@@ -102,6 +144,8 @@ def generate_answer_template(
         return _generate_office_answer(query, documents)
     elif content_type == 'advisory':
         return _generate_advisory_answer(query, documents)
+    elif content_type == 'legal':
+        return _generate_legal_answer(query, documents)
     else:
         return _generate_general_answer(query, documents)
 
@@ -238,10 +282,182 @@ def _generate_advisory_answer(query: str, documents: List[Advisory]) -> str:
     return answer
 
 
+def _clean_text(value: str) -> str:
+    """Normalize whitespace and strip noise for legal snippets."""
+    if not value:
+        return ""
+    compressed = re.sub(r"\s+", " ", value)
+    return compressed.strip()
+
+
+def _summarize_section(
+    section: LegalSection,
+    max_sentences: int = 3,
+    max_chars: int = 600
+) -> str:
+    """
+    Produce a concise Vietnamese summary directly from the stored content.
+    
+    This is used as the Vietnamese prefill before calling the LLM so we avoid
+    English drift and keep the answer grounded.
+    """
+    content = _clean_text(section.content)
+    if not content:
+        return ""
+
+    # Split by sentence boundaries; fall back to chunks if delimiters missing.
+    sentences = re.split(r"(?<=[.!?])\s+", content)
+    if not sentences:
+        sentences = [content]
+
+    summary_parts = []
+    for sentence in sentences:
+        if not sentence:
+            continue
+        summary_parts.append(sentence)
+        joined = " ".join(summary_parts)
+        if len(summary_parts) >= max_sentences or len(joined) >= max_chars:
+            break
+
+    summary = " ".join(summary_parts)
+    if len(summary) > max_chars:
+        summary = summary[:max_chars].rsplit(" ", 1)[0] + "..."
+    return summary.strip()
+
+
+def _format_citation(section: LegalSection) -> str:
+    citation = section.document.title
+    if section.section_code:
+        citation = f"{citation} – {section.section_code}"
+    page = ""
+    if section.page_start:
+        page = f" (trang {section.page_start}"
+        if section.page_end and section.page_end != section.page_start:
+            page += f"-{section.page_end}"
+        page += ")"
+    return f"{citation}{page}".strip()
+
+
+def _build_legal_prefill(documents: List[LegalSection]) -> str:
+    """
+    Build a compact Vietnamese summary block that will be injected into the
+    Guardrails prompt. The goal is to bias the model toward Vietnamese output.
+    """
+    if not documents:
+        return ""
+
+    lines = ["Bản tóm tắt tiếng Việt từ cơ sở dữ liệu:"]
+    for idx, section in enumerate(documents[:3], start=1):
+        summary = _summarize_section(section, max_sentences=2, max_chars=400)
+        citation = _format_citation(section)
+        if not summary:
+            continue
+        lines.append(f"{idx}. {summary} (Nguồn: {citation})")
+
+    return "\n".join(lines)
+
+
+def _generate_legal_citation_block(documents: List[LegalSection]) -> str:
+    """Return formatted citation block reused by multiple answer modes."""
+    if not documents:
+        return ""
+
+    lines: List[str] = []
+    for idx, section in enumerate(documents[:5], start=1):
+        summary = _summarize_section(section)
+        snippet = _clean_text(section.content)[:350]
+        if snippet and len(snippet) == 350:
+            snippet = snippet.rsplit(" ", 1)[0] + "..."
+        citation = _format_citation(section)
+
+        lines.append(f"{idx}. {section.section_title or 'Nội dung'} – {citation}")
+        if summary:
+            lines.append(f"   - Tóm tắt: {summary}")
+        if snippet:
+            lines.append(f"   - Trích dẫn: \"{snippet}\"")
+        lines.append("")
+
+    if len(documents) > 5:
+        lines.append(f"... và {len(documents) - 5} trích đoạn khác trong cùng nguồn dữ liệu.")
+
+    return "\n".join(lines).strip()
+
+
+def _generate_legal_answer(query: str, documents: List[LegalSection]) -> str:
+    count = len(documents)
+    if count == 0:
+        return (
+            f"Tôi chưa tìm thấy trích dẫn pháp lý nào cho '{query}'. "
+            "Bạn có thể cung cấp thêm ngữ cảnh để tôi tiếp tục hỗ trợ."
+        )
+
+    header = (
+        f"Tôi đã tổng hợp {count} trích đoạn pháp lý liên quan đến '{query}'. "
+        "Đây là bản tóm tắt tiếng Việt kèm trích dẫn:"
+    )
+    citation_block = _generate_legal_citation_block(documents)
+    return f"{header}\n\n{citation_block}".strip()
+
+
 def _generate_general_answer(query: str, documents: List[Any]) -> str:
     """Generate general answer."""
     count = len(documents)
     return f"Tôi tìm thấy {count} kết quả liên quan đến '{query}'. Vui lòng xem chi tiết bên dưới."
+
+
+def _strip_accents(value: str) -> str:
+    return "".join(
+        char for char in unicodedata.normalize("NFD", value)
+        if unicodedata.category(char) != "Mn"
+    )
+
+
+def _contains_markers(
+    text_with_accents: str,
+    text_without_accents: str,
+    markers: List[str]
+) -> bool:
+    for marker in markers:
+        marker_lower = marker.lower()
+        marker_no_accents = _strip_accents(marker_lower)
+        if marker_lower in text_with_accents or marker_no_accents in text_without_accents:
+            return True
+    return False
+
+
+def _is_valid_legal_answer(answer: str, documents: List[LegalSection]) -> bool:
+    """
+    Validate that the LLM answer for legal intent references actual legal content.
+    
+    Criteria:
+        - Must not contain denial phrases (already handled earlier) or "xin lỗi".
+        - Must not introduce obvious monetary values (legal documents không có số tiền phạt).
+        - Must have tối thiểu 40 ký tự để tránh câu trả lời quá ngắn.
+    """
+    if not answer:
+        return False
+    
+    normalized_answer = answer.lower()
+    normalized_answer_no_accents = _strip_accents(normalized_answer)
+    
+    denial_markers = [
+        "xin lỗi",
+        "thông tin trong cơ sở dữ liệu chưa đủ",
+        "không thể giúp",
+        "không tìm thấy thông tin",
+        "không có dữ liệu",
+    ]
+    if _contains_markers(normalized_answer, normalized_answer_no_accents, denial_markers):
+        return False
+    
+    money_markers = ["vnđ", "vnd", "đồng", "đ", "dong"]
+    if _contains_markers(normalized_answer, normalized_answer_no_accents, money_markers):
+        return False
+    
+    if len(answer.strip()) < 40:
+        return False
+    
+    return True
 
 
 def rag_pipeline(
@@ -272,6 +488,9 @@ def rag_pipeline(
         'search_fine': 'fine',
         'search_office': 'office',
         'search_advisory': 'advisory',
+        'search_legal': 'legal',
+        'general_query': 'general',
+        'greeting': 'general',
     }
     
     content_type = intent_to_type.get(intent, 'procedure')
@@ -279,17 +498,53 @@ def rag_pipeline(
     # Retrieve documents
     documents = retrieve_top_k_documents(query, content_type, top_k=top_k)
     
-    if not documents:
-        return {
-            'answer': f"Xin lỗi, tôi không tìm thấy thông tin liên quan đến '{query}'.",
-            'documents': [],
-            'count': 0,
-            'confidence': 0.0,
-            'content_type': content_type
-        }
-    
-    # Generate answer (with LLM if available)
-    answer = generate_answer_template(query, documents, content_type, context=context, use_llm=use_llm)
+    # Enable LLM automatically for casual conversation intents
+    llm_allowed = use_llm or intent in {"general_query", "greeting"}
+
+    structured_used = False
+    answer: Optional[str] = None
+
+    if intent == "search_legal" and documents:
+        llm = get_llm_generator()
+        if llm:
+            prefill_summary = _build_legal_prefill(documents)
+            structured = llm.generate_structured_legal_answer(
+                query,
+                documents,
+                prefill_summary=prefill_summary,
+            )
+            if structured:
+                answer = format_structured_legal_answer(structured)
+                structured_used = True
+                citation_block = _generate_legal_citation_block(documents)
+                if citation_block:
+                    answer = (
+                        f"{answer.rstrip()}\n\nTrích dẫn chi tiết:\n{citation_block}"
+                    )
+
+    if answer is None:
+        answer = generate_answer_template(
+            query,
+            documents,
+            content_type,
+            context=context,
+            use_llm=llm_allowed
+        )
+
+    # Fallback nếu intent pháp luật nhưng câu LLM không đạt tiêu chí
+    if (
+        intent == "search_legal"
+        and documents
+        and isinstance(answer, str)
+        and not structured_used
+    ):
+        if not _is_valid_legal_answer(answer, documents):
+            print("[RAG] ⚠️ Fallback: invalid legal answer detected", flush=True)
+            answer = _generate_legal_answer(query, documents)
+        else:
+            citation_block = _generate_legal_answer(query, documents)
+            if citation_block.strip():
+                answer = f"{answer.rstrip()}\n\nTrích dẫn chi tiết:\n{citation_block}"
     
     # Calculate confidence (simple: based on number of results and scores)
     confidence = min(1.0, len(documents) / top_k)
