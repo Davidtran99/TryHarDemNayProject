@@ -708,29 +708,39 @@ class Chatbot:
             rag_context = None
             if context_messages:
                 rag_context = context_messages
-            rag_result = rag_pipeline(query, intent, top_k=5, min_confidence=confidence, context=rag_context, use_llm=False)  # Don't use LLM yet, check results first
+            # First, try to retrieve documents without LLM to check if we have results
+            from hue_portal.core.rag import retrieve_top_k_documents
+            from hue_portal.core.config.hybrid_search_config import get_config
+            
+            # Map intent to content type for initial check
+            intent_to_type = {
+                'search_procedure': 'procedure',
+                'search_fine': 'fine',
+                'search_office': 'office',
+                'search_advisory': 'advisory',
+                'search_legal': 'legal',
+                'general_query': 'general',
+                'greeting': 'general',
+            }
+            initial_content_type = intent_to_type.get(intent, 'procedure')
+            
+            # Quick check: retrieve documents first (without LLM generation)
+            initial_docs = retrieve_top_k_documents(query, initial_content_type, top_k=5) if initial_content_type != 'general' else []
             
             # AUTO-RETRY: If general_query has no results, try search_legal automatically
-            if intent == "general_query" and rag_result.get("count", 0) == 0:
+            if intent == "general_query" and len(initial_docs) == 0:
                 # Check if query might be about legal documents
                 legal_keywords = ["kỷ luật", "quyết định", "quy định", "thông tư", "đảng viên", "hình thức", "ky luat", "quyet dinh", "quy dinh", "thong tu", "dang vien", "hinh thuc"]
                 query_lower = query.lower()
                 if any(kw in query_lower for kw in legal_keywords):
                     print(f"[AUTO-RETRY] general_query has no results, trying search_legal...", flush=True)
-                    auto_retry_intent = "search_legal"
-                    rag_result = rag_pipeline(query, "search_legal", top_k=5, min_confidence=0.3, context=rag_context, use_llm=True)
-                    if rag_result.get("count", 0) > 0:
+                    retry_docs = retrieve_top_k_documents(query, 'legal', top_k=5)
+                    if len(retry_docs) > 0:
                         intent = "search_legal"  # Update intent based on successful retry
-                        print(f"[AUTO-RETRY] ✅ Found {rag_result.get('count')} results with search_legal", flush=True)
-                    else:
-                        # Retry failed, use original general_query result
-                        rag_result = rag_pipeline(query, "general_query", top_k=5, min_confidence=confidence, context=rag_context, use_llm=True)
-            elif rag_result.get("count", 0) == 0 and intent != "general_query":
-                # For other intents, if no results, generate answer with LLM
-                rag_result = rag_pipeline(query, intent, top_k=5, min_confidence=confidence, context=rag_context, use_llm=True)
-            elif rag_result.get("count", 0) > 0:
-                # If we have results, generate answer with LLM
-                rag_result = rag_pipeline(query, intent, top_k=5, min_confidence=confidence, context=rag_context, use_llm=True)
+                        print(f"[AUTO-RETRY] ✅ Found {len(retry_docs)} results with search_legal", flush=True)
+            
+            # Now call RAG pipeline with correct intent to generate answer
+            rag_result = rag_pipeline(query, intent, top_k=5, min_confidence=confidence, context=rag_context, use_llm=True)
             
             # Use RAG answer if available (even with count=0 for general conversation)
             if rag_result.get("answer") and (rag_result["count"] > 0 or rag_result.get("answer", "").strip()):
