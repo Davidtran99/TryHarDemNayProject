@@ -73,27 +73,27 @@ if database_url:
     print(f"[DB] Using DATABASE_URL: {masked}", flush=True)
 else:
     print("[DB] DATABASE_URL not provided – thử kết nối qua POSTGRES_* / tunnel.", flush=True)
-try:
-    import psycopg2
+    try:
+        import psycopg2
 
         host = env("POSTGRES_HOST", default="localhost")
         port = env("POSTGRES_PORT", default="5543")
         user = env("POSTGRES_USER", default="hue")
-        password = env("POSTGRES_PASSWORD", default="huepass")
+        password = env("POSTGRES_PASSWORD", default="huepass123")
         database = env("POSTGRES_DB", default="hue_portal")
 
         last_error = None
         for attempt in range(1, 4):
             try:
-    test_conn = psycopg2.connect(
+                test_conn = psycopg2.connect(
                     host=host,
                     port=port,
                     user=user,
                     password=password,
                     database=database,
                     connect_timeout=3,
-    )
-    test_conn.close()
+                )
+                test_conn.close()
                 last_error = None
                 break
             except psycopg2.OperationalError as exc:
@@ -107,9 +107,9 @@ try:
         if last_error:
             raise last_error
 
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.postgresql",
                 "NAME": database,
                 "USER": user,
                 "PASSWORD": password,
@@ -126,12 +126,13 @@ try:
             f"[DB] ⚠️ Falling back to SQLite because PostgreSQL is unavailable ({db_error})",
             flush=True,
         )
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.sqlite3",
+                "NAME": BASE_DIR / "db.sqlite3",
+            }
         }
-    }
+
 
 # Cache configuration: opt-in Redis, otherwise safe local cache
 USE_REDIS_CACHE = env.bool("ENABLE_REDIS_CACHE", default=False)
