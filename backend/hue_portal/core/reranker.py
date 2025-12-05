@@ -102,9 +102,6 @@ def rerank_documents(
     Returns:
         Top-k reranked documents.
     """
-    # Cap top_k to a small value to control cost
-    top_k = max(1, min(top_k or 3, 5))
-
     if not documents or not query:
         return documents[:top_k]
     
