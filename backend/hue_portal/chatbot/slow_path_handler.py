@@ -30,7 +30,6 @@ from hue_portal.chatbot.context_manager import ConversationContext
 from hue_portal.chatbot.router import DOCUMENT_CODE_PATTERNS
 from hue_portal.core.query_rewriter import get_query_rewriter
 from hue_portal.core.pure_semantic_search import pure_semantic_search, parallel_vector_search
-from hue_portal.core.redis_cache import get_redis_cache
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +49,6 @@ class SlowPathHandler:
         self.redis_cache = get_redis_cache()
         # Prefetch cache TTL (30 minutes default)
         self.prefetch_cache_ttl = int(os.environ.get("CACHE_PREFETCH_TTL", "1800"))
-        # Toggle wizard flow (disable to answer directly)
-        self.disable_wizard_flow = os.environ.get("DISABLE_WIZARD_FLOW", "false").lower() == "true"
     
     def handle(
         self,
@@ -117,46 +114,13 @@ class SlowPathHandler:
         )
         if (
             intent == "search_legal"
-            and not self.disable_wizard_flow
             and not selected_document_code_normalized
             and not has_explicit_code
         ):
-            logger.info("[QUERY_REWRITE] ✅ Wizard conditions met, using Query Rewrite Strategy")
+            # DISABLED: Query Rewrite Strategy (mất 5-10s, gây timeout)
+            # Sử dụng pure semantic search trực tiếp với query gốc để nhanh hơn
+            logger.info("[SEARCH] Using direct semantic search (Query Rewrite disabled for performance)")
             
-            # Query Rewrite Strategy: Rewrite query into 3-5 optimized legal queries
-            query_rewriter = get_query_rewriter(self.llm_generator)
-            
-            # Get conversation context for query rewriting
-            context = None
-            if session_id:
-                try:
-                    recent_messages = ConversationContext.get_recent_messages(session_id, limit=5)
-                    context = [
-                        {"role": msg.role, "content": msg.content}
-                        for msg in recent_messages
-                    ]
-                except Exception as exc:
-                    logger.warning("[QUERY_REWRITE] Failed to load context: %s", exc)
-            
-            # Rewrite query into 3-5 queries
-            rewritten_queries = query_rewriter.rewrite_query(
-                query,
-                context=context,
-                max_queries=5,
-                min_queries=3
-            )
-            
-            if not rewritten_queries:
-                # Fallback to original query if rewrite fails
-                rewritten_queries = [query]
-            
-            logger.info(
-                "[QUERY_REWRITE] Rewrote query into %d queries: %s",
-                len(rewritten_queries),
-                rewritten_queries[:3]
-            )
-            
-            # Parallel vector search with multiple queries
             try:
                 from hue_portal.core.models import LegalSection
                 
@@ -164,12 +128,13 @@ class SlowPathHandler:
                 qs = LegalSection.objects.all()
                 text_fields = ["section_title", "section_code", "content"]
                 
-                # Use parallel vector search
-                search_results = parallel_vector_search(
-                    rewritten_queries,
+                # Use direct semantic search with original query (no rewrite)
+                # Use _single_query_search directly to get (section, score) tuples
+                from hue_portal.core.pure_semantic_search import _single_query_search
+                search_results = _single_query_search(
+                    query,
                     qs,
-                    top_k_per_query=5,
-                    final_top_k=7,
+                    top_k=10,
                     text_fields=text_fields
                 )
                 
@@ -177,6 +142,7 @@ class SlowPathHandler:
                 doc_codes_seen: Set[str] = set()
                 document_options: List[Dict[str, Any]] = []
                 
+                # search_results is List[Tuple[section, score]]
                 for section, score in search_results:
                     doc = getattr(section, "document", None)
                     if not doc:
@@ -265,7 +231,7 @@ class SlowPathHandler:
                 )
                 
                 logger.info(
-                    "[QUERY_REWRITE] ✅ Found %d documents using Query Rewrite Strategy",
+                    "[SEARCH] ✅ Found %d documents using direct semantic search",
                     len(document_options)
                 )
                 
@@ -281,14 +247,14 @@ class SlowPathHandler:
                     "results": [],
                     "count": 0,
                     "intent": intent,
-                    "_source": "query_rewrite",
-                    "routing": "query_rewrite",
-                    "confidence": 0.95,  # High confidence with Query Rewrite Strategy
+                    "_source": "direct_search",
+                    "routing": "direct_search",
+                    "confidence": 0.85,  # Slightly lower than query rewrite but still good
                 }
                 
             except Exception as exc:
                 logger.error(
-                    "[QUERY_REWRITE] Error in Query Rewrite Strategy: %s, falling back to LLM suggestions",
+                    "[SEARCH] Error in direct semantic search: %s, falling back to LLM suggestions",
                     exc,
                     exc_info=True
                 )
