@@ -136,7 +136,7 @@ class Chatbot(CoreChatbot):
         # tránh trả lại các câu trả lời cũ không có options.
         cached_response = None
         if intent != "search_legal":
-            cached_response = EXACT_MATCH_CACHE.get(query, intent)
+        cached_response = EXACT_MATCH_CACHE.get(query, intent)
         if cached_response:
             cached_response["_cache"] = "exact_match"
             cached_response["_source"] = cached_response.get("_source", "cache")
@@ -167,8 +167,6 @@ class Chatbot(CoreChatbot):
         # Stage 2: Choose topic/section (if document selected but no topic)
         # Stage 3: Choose detail (if topic selected, ask for more details)
         # Final: Answer (when user says "Không" or after detail selection)
-        disable_wizard_flow = os.environ.get("DISABLE_WIZARD_FLOW", "false").lower() == "true"
-        print(f"[WIZARD] DISABLE_WIZARD_FLOW={os.environ.get('DISABLE_WIZARD_FLOW', 'false')} -> disable_wizard_flow={disable_wizard_flow}")
         
         has_doc_code_in_query = self._query_has_document_code(query)
         wizard_stage = session_metadata.get("wizard_stage") if session_metadata else None
@@ -177,41 +175,11 @@ class Chatbot(CoreChatbot):
         
         print(f"[WIZARD] Chatbot layer check - intent={intent}, wizard_stage={wizard_stage}, selected_doc_code={selected_doc_code}, selected_topic={selected_topic}, has_doc_code_in_query={has_doc_code_in_query}, query='{query[:50]}'")
         
-        # CRITICAL: If wizard flow is disabled, reset all wizard state immediately
-        if disable_wizard_flow:
-            print("[WIZARD] 🚫 Wizard flow DISABLED - resetting all wizard state and skipping wizard stages")
-            selected_doc_code = None
-            selected_topic = None
-            wizard_stage = None
-            wizard_depth = 0
-            # Update session metadata to clear wizard state
-            if session_id:
-                try:
-                    ConversationContext.update_session_metadata(
-                        session_id,
-                        {
-                            "selected_document_code": None,
-                            "selected_topic": None,
-                            "wizard_stage": None,
-                            "wizard_depth": 0,
-                        }
-                    )
-                    print("[WIZARD] ✅ Wizard state cleared from session metadata")
-                except Exception as e:
-                    print(f"⚠️ Failed to clear wizard state: {e}")
-            # Also update session_metadata dict for current function scope
-            if session_metadata:
-                session_metadata["selected_document_code"] = None
-                session_metadata["selected_topic"] = None
-                session_metadata["wizard_stage"] = None
-                session_metadata["wizard_depth"] = 0
-        
         # Reset wizard state if new query doesn't have document code and wizard_stage is "answer"
         # This handles the case where user asks a new question after completing a previous wizard flow
         # CRITICAL: Check conditions and reset BEFORE Stage 1 check
         should_reset = (
-            not disable_wizard_flow
-            and intent == "search_legal" 
+            intent == "search_legal" 
             and not has_doc_code_in_query 
             and wizard_stage == "answer"
         )
@@ -245,15 +213,10 @@ class Chatbot(CoreChatbot):
                 session_metadata["wizard_depth"] = 0
         
         # Stage 1: Choose document (if no document selected and no code in query)
-        # Use Query Rewrite Strategy from slow_path_handler instead of old LLM suggestions
-        if (
-            intent == "search_legal"
-            and not selected_doc_code
-            and not has_doc_code_in_query
-            and not disable_wizard_flow
-        ):
-            print("[WIZARD] ✅ Stage 1: Using Query Rewrite Strategy from slow_path_handler")
-            # Delegate to slow_path_handler which has Query Rewrite Strategy
+        # Use direct semantic search from slow_path_handler (Query Rewrite disabled for performance)
+        if intent == "search_legal" and not selected_doc_code and not has_doc_code_in_query:
+            print("[WIZARD] ✅ Stage 1: Using direct semantic search from slow_path_handler")
+            # Delegate to slow_path_handler which uses direct semantic search (no query rewrite)
             slow_handler = SlowPathHandler()
             response = slow_handler.handle(
                 query=query,
@@ -303,14 +266,7 @@ class Chatbot(CoreChatbot):
         
         # Stage 2: Choose topic/section (if document selected but no topic yet)
         # Skip if wizard_stage is already "answer" (user wants final answer)
-        if (
-            intent == "search_legal"
-            and selected_doc_code
-            and not selected_topic
-            and not has_doc_code_in_query
-            and wizard_stage != "answer"
-            and not disable_wizard_flow
-        ):
+        if intent == "search_legal" and selected_doc_code and not selected_topic and not has_doc_code_in_query and wizard_stage != "answer":
             print("[WIZARD] ✅ Stage 2 triggered: Choose topic/section")
             
             # Get document title
