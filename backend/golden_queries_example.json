@@ -1,0 +1,68 @@
+[
+  {
+    "query": "Mức phạt vượt đèn đỏ là bao nhiêu?",
+    "intent": "search_fine",
+    "response_message": "Mức phạt vượt đèn đỏ theo Nghị định 100/2019/NĐ-CP là từ 200.000 - 400.000 VNĐ, tùy thuộc vào mức độ vi phạm.",
+    "response_data": {
+      "message": "Mức phạt vượt đèn đỏ theo Nghị định 100/2019/NĐ-CP là từ 200.000 - 400.000 VNĐ, tùy thuộc vào mức độ vi phạm.",
+      "intent": "search_fine",
+      "confidence": 0.95,
+      "results": [
+        {
+          "type": "fine",
+          "data": {
+            "id": 1,
+            "name": "Vượt đèn đỏ",
+            "code": "V001",
+            "min_fine": 200000,
+            "max_fine": 400000,
+            "article": "Điều 5",
+            "decree": "Nghị định 100/2019/NĐ-CP"
+          }
+        }
+      ],
+      "count": 1
+    },
+    "verified_by": "legal_expert",
+    "accuracy_score": 1.0
+  },
+  {
+    "query": "Thủ tục đăng ký tạm trú cần những gì?",
+    "intent": "search_procedure",
+    "response_message": "Thủ tục đăng ký tạm trú cần các giấy tờ sau: CMND/CCCD, giấy tờ chứng minh nơi ở, đơn đăng ký tạm trú. Nộp tại Công an phường/xã nơi tạm trú.",
+    "response_data": {
+      "message": "Thủ tục đăng ký tạm trú cần các giấy tờ sau: CMND/CCCD, giấy tờ chứng minh nơi ở, đơn đăng ký tạm trú. Nộp tại Công an phường/xã nơi tạm trú.",
+      "intent": "search_procedure",
+      "confidence": 0.95,
+      "results": [
+        {
+          "type": "procedure",
+          "data": {
+            "id": 1,
+            "title": "Đăng ký tạm trú",
+            "domain": "Cư trú",
+            "level": "Phường/Xã"
+          }
+        }
+      ],
+      "count": 1
+    },
+    "verified_by": "legal_expert",
+    "accuracy_score": 1.0
+  },
+  {
+    "query": "Địa chỉ công an phường ở đâu?",
+    "intent": "search_office",
+    "response_message": "Địa chỉ công an phường tùy thuộc vào phường bạn đang ở. Bạn có thể tra cứu tại trang web hoặc liên hệ số điện thoại 0234.xxx.xxx để được hướng dẫn.",
+    "response_data": {
+      "message": "Địa chỉ công an phường tùy thuộc vào phường bạn đang ở. Bạn có thể tra cứu tại trang web hoặc liên hệ số điện thoại 0234.xxx.xxx để được hướng dẫn.",
+      "intent": "search_office",
+      "confidence": 0.95,
+      "results": [],
+      "count": 0
+    },
+    "verified_by": "manual",
+    "accuracy_score": 1.0
+  }
+]
+
