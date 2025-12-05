@@ -172,3 +172,49 @@ class ConversationContext:
         
         return entities
 
+    @staticmethod
+    def get_session_metadata(session_id: str) -> Dict[str, Any]:
+        """
+        Return metadata stored with the conversation session.
+        """
+        if not session_id:
+            return {}
+        try:
+            session = ConversationSession.objects.get(session_id=session_id)
+            return session.metadata or {}
+        except ConversationSession.DoesNotExist:
+            return {}
+
+    @staticmethod
+    def update_session_metadata(session_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Merge provided data into session metadata and persist.
+        """
+        if not session_id:
+            return {}
+        session = ConversationContext.get_session(session_id=session_id)
+        metadata = session.metadata or {}
+        metadata.update(data)
+        session.metadata = metadata
+        session.save(update_fields=["metadata", "updated_at"])
+        return metadata
+
+    @staticmethod
+    def clear_session_metadata_keys(session_id: str, keys: List[str]) -> Dict[str, Any]:
+        """
+        Remove specific keys from session metadata.
+        """
+        if not session_id:
+            return {}
+        session = ConversationContext.get_session(session_id=session_id)
+        metadata = session.metadata or {}
+        changed = False
+        for key in keys:
+            if key in metadata:
+                metadata.pop(key)
+                changed = True
+        if changed:
+            session.metadata = metadata
+            session.save(update_fields=["metadata", "updated_at"])
+        return metadata
+
