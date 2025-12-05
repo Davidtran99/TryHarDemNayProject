@@ -447,7 +447,7 @@ class SlowPathHandler:
 ## 🚀 Deployment
 
 ### Hugging Face Spaces
-- **Space:** `davidtran999/hue-portal-backend`
+- **Space:** `davidtran999/hue-portal-backend-v2`
 - **SDK:** Docker
 - **Resources:** CPU, 16GB RAM (free tier)
 - **Database:** Railway PostgreSQL (external)
