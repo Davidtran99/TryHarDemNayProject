@@ -1,0 +1,67 @@
+from django.urls import path
+from . import views
+from .auth_views import RegisterView, LoginView, LogoutView, CurrentUserView
+from .admin_views import (
+    AdminUserListView,
+    AdminUserCreateView,
+    AdminUserUpdateView,
+    AdminUserResetPasswordView,
+    AdminActivityLogsView,
+    AdminImportHistoryView,
+    AdminAlertsView,
+    AdminDashboardStatsView,
+    AdminDashboardDocumentsWeekView,
+    AdminDashboardRecentActivityView,
+    AdminSystemLogsStatsView,
+    AdminSystemLogsDeviceStatsView,
+    AdminSystemLogsUsageOverTimeView,
+    AdminDocumentListView,
+    AdminDocumentDetailView,
+    AdminDocumentImportView,
+)
+
+urlpatterns = [
+    path("auth/register/", RegisterView.as_view()),
+    path("auth/login/", LoginView.as_view()),
+    path("auth/logout/", LogoutView.as_view()),
+    path("auth/me/", CurrentUserView.as_view()),
+    path("search/", views.search),
+    path("chat/", views.chat),
+    path("procedures/", views.procedures_list),
+    path("procedures/<int:pk>/", views.procedures_detail),
+    path("fines/", views.fines_list),
+    path("fines/<int:pk>/", views.fines_detail),
+    path("offices/", views.offices_list),
+    path("offices/<int:pk>/", views.offices_detail),
+    path("advisories/", views.advisories_list),
+    path("advisories/<int:pk>/", views.advisories_detail),
+    path("legal-sections/", views.legal_sections_list),
+    path("legal-sections/<int:pk>/", views.legal_sections_detail),
+    path(
+        "legal-documents/<int:pk>/download/",
+        views.legal_document_download,
+        name="legal-document-download",
+    ),
+    path("legal-documents/upload/", views.legal_document_upload),
+    path("legal-ingestion-jobs/", views.legal_ingestion_job_list),
+    path("legal-ingestion-jobs/<uuid:job_id>/", views.legal_ingestion_job_detail),
+    # Admin endpoints
+    path("admin/users/", AdminUserListView.as_view()),
+    path("admin/users/create/", AdminUserCreateView.as_view()),
+    path("admin/users/<int:user_id>/", AdminUserUpdateView.as_view()),
+    path("admin/users/<int:user_id>/reset-password/", AdminUserResetPasswordView.as_view()),
+    path("admin/activity-logs/", AdminActivityLogsView.as_view()),
+    path("admin/import-history/", AdminImportHistoryView.as_view()),
+    path("admin/alerts/", AdminAlertsView.as_view()),
+    path("admin/dashboard/stats/", AdminDashboardStatsView.as_view()),
+    path("admin/dashboard/documents-week/", AdminDashboardDocumentsWeekView.as_view()),
+    path("admin/dashboard/recent-activity/", AdminDashboardRecentActivityView.as_view()),
+    # System Logs endpoints
+    path("admin/logs/stats/", AdminSystemLogsStatsView.as_view()),
+    path("admin/logs/device-stats/", AdminSystemLogsDeviceStatsView.as_view()),
+    path("admin/logs/usage-over-time/", AdminSystemLogsUsageOverTimeView.as_view()),
+    # Document Management endpoints
+    path("admin/documents/", AdminDocumentListView.as_view()),
+    path("admin/documents/<int:doc_id>/", AdminDocumentDetailView.as_view()),
+    path("admin/documents/import/", AdminDocumentImportView.as_view()),
+]
