@@ -62,8 +62,17 @@ def _flag_keywords(query_lower: str) -> Dict[str, bool]:
             kw in query_lower
             for kw in [
                 "quyết định",
+                "quyet dinh",
                 "thông tư",
+                "thong tu",
                 "nghị quyết",
+                "nghi quyet",
+                "nghị định",
+                "nghi dinh",
+                "luật",
+                "luat",
+                "điều ",
+                "dieu ",
                 "kỷ luật",
                 "qd 69",
                 "qd 264",
