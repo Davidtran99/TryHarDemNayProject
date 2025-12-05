@@ -1,5 +1,9 @@
 """
 Hybrid search combining BM25 and vector similarity.
+
+NOTE: This module is being phased out in favor of pure semantic search.
+Pure semantic search (100% vector) is recommended when using Query Rewrite Strategy + BGE-M3.
+See pure_semantic_search.py for the new implementation.
 """
 from typing import List, Tuple, Optional, Dict, Any
 import numpy as np
@@ -14,6 +18,12 @@ from .embeddings import (
 )
 from .embedding_utils import load_embedding
 from .search_ml import expand_query_with_synonyms
+
+# Import get_vector_scores from pure_semantic_search for backward compatibility
+try:
+    from .pure_semantic_search import get_vector_scores as _get_vector_scores_from_pure
+except ImportError:
+    _get_vector_scores_from_pure = None
 
 
 # Default weights for hybrid search
@@ -163,6 +173,9 @@ def get_vector_scores(
     """
     Get vector similarity scores for queryset.
     
+    DEPRECATED: Use pure_semantic_search.get_vector_scores() instead.
+    This function is kept for backward compatibility.
+    
     Args:
         queryset: Django QuerySet to search.
         query: Search query string.
@@ -171,6 +184,11 @@ def get_vector_scores(
     Returns:
         List of (object, vector_score) tuples.
     """
+    # Try to use the new implementation from pure_semantic_search
+    if _get_vector_scores_from_pure:
+        return _get_vector_scores_from_pure(queryset, query, top_k)
+    
+    # Fallback to original implementation
     if not query:
         return []
     
