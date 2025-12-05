@@ -4,7 +4,7 @@ Chatbot API views for handling conversational queries.
 import json
 import logging
 import uuid
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -28,6 +28,25 @@ class ChatThrottle(AnonRateThrottle):
     rate = '30/minute'
 
 
+def _apply_selected_document_code(session_id: Optional[str], code: Optional[str]) -> None:
+    """Persist or clear the selected document code for a session."""
+    if not session_id:
+        return
+    if not code:
+        return
+    normalized = str(code).strip()
+    if not normalized:
+        ConversationContext.clear_session_metadata_keys(session_id, ["selected_document_code"])
+        return
+    if normalized == "__other__":
+        ConversationContext.clear_session_metadata_keys(session_id, ["selected_document_code"])
+        return
+    ConversationContext.update_session_metadata(
+        session_id,
+        {"selected_document_code": normalized.upper()},
+    )
+
+
 @csrf_exempt
 def chat_simple(request: HttpRequest) -> JsonResponse:
     """
@@ -48,6 +67,11 @@ def chat_simple(request: HttpRequest) -> JsonResponse:
     session_id_raw = payload.get("session_id") or ""
     session_id: str = str(session_id_raw).strip() if session_id_raw else ""
     reset_session: bool = bool(payload.get("reset_session", False))
+    selected_document_code = payload.get("selected_document_code") or payload.get("clarification_option")
+    if isinstance(selected_document_code, str):
+        selected_document_code = selected_document_code.strip()
+    else:
+        selected_document_code = None
 
     if not message:
         return JsonResponse({"error": "message is required"}, status=400)
@@ -62,6 +86,9 @@ def chat_simple(request: HttpRequest) -> JsonResponse:
             uuid.UUID(session_id)
         except ValueError:
             session_id = str(uuid.uuid4())
+    
+    if selected_document_code is not None:
+        _apply_selected_document_code(session_id, selected_document_code)
 
     try:
         chatbot = get_chatbot()
@@ -124,6 +151,11 @@ def chat(request: Request) -> Response:
     else:
         session_id = ""
     reset_session = request.data.get("reset_session", False)
+    selected_document_code = request.data.get("selected_document_code") or request.data.get("clarification_option")
+    if isinstance(selected_document_code, str):
+        selected_document_code = selected_document_code.strip()
+    else:
+        selected_document_code = None
     
     # Log received message for debugging
     message_preview = message[:100] + "..." if len(message) > 100 else message
@@ -150,6 +182,9 @@ def chat(request: Request) -> Response:
         except ValueError:
             # Invalid UUID format, generate new one
             session_id = str(uuid.uuid4())
+    
+    if selected_document_code is not None:
+        _apply_selected_document_code(session_id, selected_document_code)
     
     try:
         logger.info(f"[CHAT] ⏳ Starting response generation for message (length: {len(message)})")
