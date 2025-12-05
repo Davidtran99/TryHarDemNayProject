@@ -125,7 +125,6 @@ DEFAULT_LLM_PROVIDER = os.environ.get(
 ).lower()
 env_provider = os.environ.get("LLM_PROVIDER", "").strip().lower()
 LLM_PROVIDER = env_provider or DEFAULT_LLM_PROVIDER
-LLM_MODE = os.environ.get("LLM_MODE", "answer").strip().lower() or "answer"
 LEGAL_STRUCTURED_MAX_ATTEMPTS = max(
     1, int(os.environ.get("LEGAL_STRUCTURED_MAX_ATTEMPTS", "2"))
 )
@@ -146,7 +145,6 @@ class LLMGenerator:
             provider: LLM provider ('openai', 'anthropic', 'ollama', 'local', 'huggingface', 'api', or None for auto-detect).
         """
         self.provider = provider or LLM_PROVIDER
-        self.llm_mode = LLM_MODE if LLM_MODE in {"keywords", "answer"} else "answer"
         self.client = None
         self.local_model = None
         self.local_tokenizer = None
@@ -198,7 +196,7 @@ class LLMGenerator:
             # API mode - call HF Spaces API
             self.api_base_url = os.environ.get(
                 "HF_API_BASE_URL", 
-                "https://davidtran999-hue-portal-backend.hf.space/api"
+                "https://davidtran999-hue-portal-backend-v2.hf.space/api"
             )
             print(f"✅ API mode configured (base_url: {self.api_base_url})")
         
@@ -676,13 +674,9 @@ class LLMGenerator:
     def _generate_from_prompt(
         self,
         prompt: str,
-        context: Optional[List[Dict[str, Any]]] = None,
-        llm_mode: Optional[str] = None,
+        context: Optional[List[Dict[str, Any]]] = None
     ) -> Optional[str]:
         """Run current provider with a fully formatted prompt."""
-        mode = (llm_mode or self.llm_mode or "answer").strip().lower()
-        if mode not in {"keywords", "answer"}:
-            mode = "answer"
         if not self.is_available():
             return None
 
@@ -697,11 +691,11 @@ class LLMGenerator:
             elif self.provider == LLM_PROVIDER_OLLAMA:
                 result = self._generate_ollama(prompt)
             elif self.provider == LLM_PROVIDER_HUGGINGFACE:
-                result = self._generate_huggingface(prompt, mode)
+                result = self._generate_huggingface(prompt)
             elif self.provider == LLM_PROVIDER_LOCAL:
-                result = self._generate_local(prompt, mode)
+                result = self._generate_local(prompt)
             elif self.provider == LLM_PROVIDER_LLAMA_CPP:
-                result = self._generate_llama_cpp(prompt, mode)
+                result = self._generate_llama_cpp(prompt)
             elif self.provider == LLM_PROVIDER_API:
                 result = self._generate_api(prompt, context)
             else:
@@ -772,7 +766,7 @@ class LLMGenerator:
             "Chỉ in JSON, không thêm lời giải thích khác."
         ).format(max_options=max_options)
         
-        raw = self._generate_from_prompt(prompt, llm_mode="keywords")
+        raw = self._generate_from_prompt(prompt)
         if not raw:
             return None
         
@@ -885,7 +879,7 @@ class LLMGenerator:
             "Chỉ in JSON, không thêm lời giải thích khác."
         )
         
-        raw = self._generate_from_prompt(prompt, llm_mode="keywords")
+        raw = self._generate_from_prompt(prompt)
         if not raw:
             return None
         
@@ -981,7 +975,7 @@ class LLMGenerator:
             "Chỉ in JSON, không thêm lời giải thích khác."
         )
         
-        raw = self._generate_from_prompt(prompt, llm_mode="keywords")
+        raw = self._generate_from_prompt(prompt)
         if not raw:
             return None
         
@@ -1070,7 +1064,7 @@ class LLMGenerator:
             "Chỉ in JSON, không thêm lời giải thích khác."
         )
         
-        raw = self._generate_from_prompt(prompt, llm_mode="keywords")
+        raw = self._generate_from_prompt(prompt)
         if not raw:
             return self._fallback_keyword_extraction(query)
         
@@ -1349,7 +1343,7 @@ class LLMGenerator:
             print(f"Ollama API error: {e}")
             return None
     
-    def _generate_huggingface(self, prompt: str, mode: str = "answer") -> Optional[str]:
+    def _generate_huggingface(self, prompt: str) -> Optional[str]:
         """Generate answer using Hugging Face Inference API."""
         try:
             import requests
@@ -1365,8 +1359,8 @@ class LLMGenerator:
                 json={
                     "inputs": prompt,
                     "parameters": {
-                        "temperature": 0.2 if mode == "keywords" else 0.7,
-                        "max_new_tokens": 80 if mode == "keywords" else 256,
+                        "temperature": 0.4,
+                        "max_new_tokens": 80,
                         "return_full_text": False
                     }
                 },
@@ -1390,7 +1384,7 @@ class LLMGenerator:
             print(f"Hugging Face API error: {e}")
             return None
     
-    def _generate_local(self, prompt: str, mode: str = "answer") -> Optional[str]:
+    def _generate_local(self, prompt: str) -> Optional[str]:
         """Generate answer using local Hugging Face Transformers model."""
         if self.local_model is None or self.local_tokenizer is None:
             return None
@@ -1399,20 +1393,15 @@ class LLMGenerator:
             import torch
             
             # Format prompt for Qwen models
-            if mode == "keywords":
-                system_content = (
-                    "Bạn là trợ lý trích xuất từ khóa. Nhận câu hỏi pháp lý và "
-                    "chỉ trả về 5-8 từ khóa tiếng Việt, phân tách bằng dấu phẩy. "
-                    "Không viết câu đầy đủ, không thêm lời giải thích."
-                )
-            else:
-                system_content = (
-                    "Bạn là chuyên gia tư vấn pháp luật. Trả lời tự nhiên, ngắn gọn, "
-                    "dựa trên thông tin đã cho."
-                )
-
             messages = [
-                {"role": "system", "content": system_content},
+                {
+                    "role": "system",
+                    "content": (
+                        "Bạn là trợ lý trích xuất từ khóa. Nhận câu hỏi pháp lý và "
+                        "chỉ trả về 5-8 từ khóa tiếng Việt, phân tách bằng dấu phẩy. "
+                        "Không viết câu đầy đủ, không thêm lời giải thích."
+                    ),
+                },
                 {"role": "user", "content": prompt},
             ]
             
@@ -1438,13 +1427,13 @@ class LLMGenerator:
                 # Use greedy decoding for faster generation (can switch to sampling if needed)
                 outputs = self.local_model.generate(
                     **inputs,
-                    max_new_tokens=80 if mode == "keywords" else 256,
-                    temperature=0.2 if mode == "keywords" else 0.6,
-                    top_p=0.7 if mode == "keywords" else 0.85,
+                    max_new_tokens=80,  # Keyword-only output, keep short
+                    temperature=0.2,
+                    top_p=0.7,
                     do_sample=True,
                     use_cache=True,  # Enable KV cache for faster generation
                     pad_token_id=self.local_tokenizer.eos_token_id,
-                    repetition_penalty=1.05 if mode == "keywords" else 1.1,
+                    repetition_penalty=1.05,  # Gentle penalty to avoid repeats
                 )
             
             # Decode
@@ -1483,38 +1472,25 @@ class LLMGenerator:
             traceback.print_exc(file=sys.stderr)
             return None
     
-    def _generate_llama_cpp(self, prompt: str, mode: str = "answer") -> Optional[str]:
+    def _generate_llama_cpp(self, prompt: str) -> Optional[str]:
         """Generate answer using llama.cpp GGUF runtime."""
         if self.llama_cpp is None:
             return None
         
         try:
-            if mode == "keywords":
-                temperature = float(os.environ.get("LLAMA_CPP_TEMPERATURE_KW", "0.2"))
-                top_p = float(os.environ.get("LLAMA_CPP_TOP_P_KW", "0.7"))
-                max_tokens = int(os.environ.get("LLAMA_CPP_MAX_TOKENS_KW", "80"))
-                repeat_penalty = float(os.environ.get("LLAMA_CPP_REPEAT_PENALTY_KW", "1.05"))
-                system_prompt = os.environ.get(
-                    "LLAMA_CPP_SYSTEM_PROMPT_KW",
-                    (
-                        "Bạn là trợ lý trích xuất từ khóa. Nhiệm vụ: nhận câu hỏi pháp lý "
-                        "và chỉ trả về 5-8 từ khóa tiếng Việt, phân tách bằng dấu phẩy. "
-                        "Không giải thích, không viết câu đầy đủ, không thêm tiền tố/hậu tố."
-                    ),
-                )
-            else:
-                temperature = float(os.environ.get("LLAMA_CPP_TEMPERATURE", "0.35"))
-                top_p = float(os.environ.get("LLAMA_CPP_TOP_P", "0.85"))
-                max_tokens = int(os.environ.get("LLAMA_CPP_MAX_TOKENS", "256"))
-                repeat_penalty = float(os.environ.get("LLAMA_CPP_REPEAT_PENALTY", "1.1"))
-                system_prompt = os.environ.get(
-                    "LLAMA_CPP_SYSTEM_PROMPT",
-                    (
-                        "Bạn là chuyên gia tư vấn về xử lí kỷ luật cán bộ đảng viên của "
-                        "Phòng Thanh Tra - Công An Thành Phố Huế. Trả lời ngắn gọn, chính "
-                        "xác, trích dẫn văn bản và mã điều nếu có."
-                    ),
-                )
+            temperature = float(os.environ.get("LLAMA_CPP_TEMPERATURE", "0.2"))
+            top_p = float(os.environ.get("LLAMA_CPP_TOP_P", "0.7"))
+            # Keyword-only, fast generation for CPU
+            max_tokens = int(os.environ.get("LLAMA_CPP_MAX_TOKENS", "80"))
+            repeat_penalty = float(os.environ.get("LLAMA_CPP_REPEAT_PENALTY", "1.05"))
+            system_prompt = os.environ.get(
+                "LLAMA_CPP_SYSTEM_PROMPT",
+                (
+                    "Bạn là trợ lý trích xuất từ khóa. Nhiệm vụ: nhận câu hỏi pháp lý "
+                    "và chỉ trả về 5-8 từ khóa tiếng Việt, phân tách bằng dấu phẩy. "
+                    "Không giải thích, không viết câu đầy đủ, không thêm tiền tố/hậu tố."
+                ),
+            )
             
             response = self.llama_cpp.create_chat_completion(
                 messages=[
@@ -1744,3 +1720,23 @@ def get_llm_generator() -> Optional[LLMGenerator]:
         logger.debug("[LLM] Reusing existing LLM generator instance (model kept alive)")
     
     return _llm_generator if _llm_generator.is_available() else None
+        _llm_generator = LLMGenerator()
+        _last_provider = current_provider
+        print(f"[LLM] 🔄 Recreated LLM generator with provider: {current_provider}", flush=True)
+    else:
+        # Model already exists and provider hasn't changed - reuse it
+        print("[LLM] ♻️ Reusing existing LLM generator instance (model kept alive)", flush=True)
+        logger.debug("[LLM] Reusing existing LLM generator instance (model kept alive)")
+    
+    return _llm_generator if _llm_generator.is_available() else None
+
+        _llm_generator = LLMGenerator()
+        _last_provider = current_provider
+        print(f"[LLM] 🔄 Recreated LLM generator with provider: {current_provider}", flush=True)
+    else:
+        # Model already exists and provider hasn't changed - reuse it
+        print("[LLM] ♻️ Reusing existing LLM generator instance (model kept alive)", flush=True)
+        logger.debug("[LLM] Reusing existing LLM generator instance (model kept alive)")
+    
+    return _llm_generator if _llm_generator.is_available() else None
+
