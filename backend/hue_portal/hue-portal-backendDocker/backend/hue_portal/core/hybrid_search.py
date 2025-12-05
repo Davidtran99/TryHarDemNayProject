@@ -1,5 +1,9 @@
 """
 Hybrid search combining BM25 and vector similarity.
+
+NOTE: This module is being phased out in favor of pure semantic search.
+Pure semantic search (100% vector) is recommended when using Query Rewrite Strategy + BGE-M3.
+See pure_semantic_search.py for the new implementation.
 """
 from typing import List, Tuple, Optional, Dict, Any
 import numpy as np
@@ -14,6 +18,12 @@ from .embeddings import (
 )
 from .embedding_utils import load_embedding
 from .search_ml import expand_query_with_synonyms
+
+# Import get_vector_scores from pure_semantic_search for backward compatibility
+try:
+    from .pure_semantic_search import get_vector_scores as _get_vector_scores_from_pure
+except ImportError:
+    _get_vector_scores_from_pure = None
 
 
 # Default weights for hybrid search
@@ -109,23 +119,48 @@ def get_bm25_scores(
         return []
     
     try:
-        expanded_queries = expand_query_with_synonyms(query)
-        combined_query = None
-        for q_variant in expanded_queries:
-            variant_query = SearchQuery(q_variant, config="simple")
-            combined_query = variant_query if combined_query is None else combined_query | variant_query
+        import sys
+        # Increase recursion limit for query expansion
+        old_limit = sys.getrecursionlimit()
+        try:
+            sys.setrecursionlimit(3000)  # Increase limit for query expansion
+            expanded_queries = expand_query_with_synonyms(query)
+            # Limit expanded queries to prevent too many variants
+            expanded_queries = expanded_queries[:5]  # Max 5 variants
+            
+            combined_query = None
+            for q_variant in expanded_queries:
+                variant_query = SearchQuery(q_variant, config="simple")
+                combined_query = variant_query if combined_query is None else combined_query | variant_query
 
-        if combined_query is not None:
+            if combined_query is not None:
+                ranked_qs = (
+                    queryset
+                    .annotate(rank=SearchRank(F("tsv_body"), combined_query))
+                    .filter(rank__gt=DEFAULT_MIN_BM25_SCORE)
+                    .order_by("-rank")
+                )
+                results = list(ranked_qs[:top_k * 2])  # Get more for hybrid ranking
+                return [(obj, float(getattr(obj, "rank", 0.0))) for obj in results]
+        finally:
+            sys.setrecursionlimit(old_limit)  # Restore original limit
+    except RecursionError as e:
+        print(f"Error in BM25 search (recursion): {e}", flush=True)
+        # Fallback: use original query without expansion
+        try:
+            variant_query = SearchQuery(query, config="simple")
             ranked_qs = (
                 queryset
-                .annotate(rank=SearchRank(F("tsv_body"), combined_query))
+                .annotate(rank=SearchRank(F("tsv_body"), variant_query))
                 .filter(rank__gt=DEFAULT_MIN_BM25_SCORE)
                 .order_by("-rank")
             )
-            results = list(ranked_qs[:top_k * 2])  # Get more for hybrid ranking
+            results = list(ranked_qs[:top_k * 2])
             return [(obj, float(getattr(obj, "rank", 0.0))) for obj in results]
+        except Exception as fallback_e:
+            print(f"Error in BM25 search fallback: {fallback_e}", flush=True)
     except Exception as e:
-        print(f"Error in BM25 search: {e}")
+        print(f"Error in BM25 search: {e}", flush=True)
     
     return []
 
@@ -138,6 +173,9 @@ def get_vector_scores(
     """
     Get vector similarity scores for queryset.
     
+    DEPRECATED: Use pure_semantic_search.get_vector_scores() instead.
+    This function is kept for backward compatibility.
+    
     Args:
         queryset: Django QuerySet to search.
         query: Search query string.
@@ -146,6 +184,11 @@ def get_vector_scores(
     Returns:
         List of (object, vector_score) tuples.
     """
+    # Try to use the new implementation from pure_semantic_search
+    if _get_vector_scores_from_pure:
+        return _get_vector_scores_from_pure(queryset, query, top_k)
+    
+    # Fallback to original implementation
     if not query:
         return []
     
