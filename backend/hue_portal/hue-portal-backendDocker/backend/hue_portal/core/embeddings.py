@@ -25,6 +25,7 @@ AVAILABLE_MODELS = {
     "vietnamese-sbert": "keepitreal/vietnamese-sbert-v2",  # Vietnamese-specific (may require auth)
     
     # Very high quality models (1024+ dim) - Best accuracy but slower
+    "bge-m3": "BAAI/bge-m3",  # Best for Vietnamese, 1024 dim, supports dense+sparse+multi-vector
     "multilingual-e5-large": "intfloat/multilingual-e5-large",  # Very high quality, 1024 dim, large model
     "multilingual-e5-base": "intfloat/multilingual-e5-base",  # High quality, 768 dim, balanced
     
@@ -34,17 +35,18 @@ AVAILABLE_MODELS = {
 }
 
 # Default embedding model for Vietnamese (can be overridden via env var)
-# Use multilingual-e5-base as default for HF Space - good balance of quality and speed
-# 768 dimensions, faster than e5-large (1024 dim), better quality than MiniLM (384 dim)
+# Use bge-m3 as default - best for Vietnamese legal documents (1024 dim)
+# Fallback to multilingual-e5-base if bge-m3 not available (768 dim, good balance)
 # Can be set via EMBEDDING_MODEL env var (supports both short names and full model paths)
 # Examples:
+#   - EMBEDDING_MODEL=bge-m3 (uses short name, recommended for Vietnamese)
 #   - EMBEDDING_MODEL=multilingual-e5-base (uses short name)
 #   - EMBEDDING_MODEL=intfloat/multilingual-e5-base (full path)
 #   - EMBEDDING_MODEL=/path/to/local/model (local model path)
 #   - EMBEDDING_MODEL=username/private-model (private HF model, requires HF_TOKEN)
 DEFAULT_MODEL_NAME = os.environ.get(
     "EMBEDDING_MODEL",
-    AVAILABLE_MODELS.get("multilingual-e5-base", "intfloat/multilingual-e5-base")
+    AVAILABLE_MODELS.get("bge-m3", "BAAI/bge-m3")  # BGE-M3 is default, no fallback
 )
 FALLBACK_MODEL_NAME = AVAILABLE_MODELS.get("paraphrase-multilingual", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
@@ -268,14 +270,28 @@ def generate_embedding(text: str, model: Optional[SentenceTransformer] = None) -
         return None
     
     try:
-        embedding = model.encode(text, normalize_embeddings=True, show_progress_bar=False)
-        return embedding
+        import sys
+        # Increase recursion limit temporarily for model.encode
+        old_limit = sys.getrecursionlimit()
+        try:
+            sys.setrecursionlimit(5000)  # Increase limit for model.encode
+            embedding = model.encode(text, normalize_embeddings=True, show_progress_bar=False, convert_to_numpy=True)
+            return embedding
+        finally:
+            sys.setrecursionlimit(old_limit)  # Restore original limit
+    except RecursionError as e:
+        print(f"Error generating embedding (recursion): {e}", flush=True)
+        return None
     except Exception as e:
-        print(f"Error generating embedding: {e}")
+        print(f"Error generating embedding: {e}", flush=True)
         return None
 
 
-def generate_embeddings_batch(texts: List[str], model: Optional[SentenceTransformer] = None, batch_size: int = 32) -> List[Optional[np.ndarray]]:
+def generate_embeddings_batch(texts: List[str], model: Optional[SentenceTransformer] = None, batch_size: Optional[int] = None) -> List[Optional[np.ndarray]]:
+    # Get batch_size from env var or use default (balance speed and RAM)
+    # Smaller batch = faster, larger batch = more RAM usage
+    if batch_size is None:
+        batch_size = int(os.environ.get("EMBEDDING_BATCH_SIZE", "128"))  # Reduced from 256 for speed
     """
     Generate embeddings for a batch of texts.
     
@@ -297,16 +313,26 @@ def generate_embeddings_batch(texts: List[str], model: Optional[SentenceTransfor
         return [None] * len(texts)
     
     try:
-        embeddings = model.encode(
-            texts,
-            batch_size=batch_size,
-            normalize_embeddings=True,
-            show_progress_bar=True,
-            convert_to_numpy=True
-        )
-        return [emb for emb in embeddings]
+        import sys
+        # Increase recursion limit temporarily for model.encode
+        old_limit = sys.getrecursionlimit()
+        try:
+            sys.setrecursionlimit(5000)  # Increase limit for model.encode
+            embeddings = model.encode(
+                texts,
+                batch_size=batch_size,
+                normalize_embeddings=True,
+                show_progress_bar=False,
+                convert_to_numpy=True
+            )
+            return [emb for emb in embeddings]
+        finally:
+            sys.setrecursionlimit(old_limit)  # Restore original limit
+    except RecursionError as e:
+        print(f"Error generating batch embeddings (recursion): {e}", flush=True)
+        return [None] * len(texts)
     except Exception as e:
-        print(f"Error generating batch embeddings: {e}")
+        print(f"Error generating batch embeddings: {e}", flush=True)
         return [None] * len(texts)
 
 
