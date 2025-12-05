@@ -1720,23 +1720,4 @@ def get_llm_generator() -> Optional[LLMGenerator]:
         logger.debug("[LLM] Reusing existing LLM generator instance (model kept alive)")
     
     return _llm_generator if _llm_generator.is_available() else None
-        _llm_generator = LLMGenerator()
-        _last_provider = current_provider
-        print(f"[LLM] 🔄 Recreated LLM generator with provider: {current_provider}", flush=True)
-    else:
-        # Model already exists and provider hasn't changed - reuse it
-        print("[LLM] ♻️ Reusing existing LLM generator instance (model kept alive)", flush=True)
-        logger.debug("[LLM] Reusing existing LLM generator instance (model kept alive)")
-    
-    return _llm_generator if _llm_generator.is_available() else None
-
-        _llm_generator = LLMGenerator()
-        _last_provider = current_provider
-        print(f"[LLM] 🔄 Recreated LLM generator with provider: {current_provider}", flush=True)
-    else:
-        # Model already exists and provider hasn't changed - reuse it
-        print("[LLM] ♻️ Reusing existing LLM generator instance (model kept alive)", flush=True)
-        logger.debug("[LLM] Reusing existing LLM generator instance (model kept alive)")
-    
-    return _llm_generator if _llm_generator.is_available() else None
 

@@ -136,7 +136,7 @@ class Chatbot(CoreChatbot):
         # tránh trả lại các câu trả lời cũ không có options.
         cached_response = None
         if intent != "search_legal":
-        cached_response = EXACT_MATCH_CACHE.get(query, intent)
+            cached_response = EXACT_MATCH_CACHE.get(query, intent)
         if cached_response:
             cached_response["_cache"] = "exact_match"
             cached_response["_source"] = cached_response.get("_source", "cache")
