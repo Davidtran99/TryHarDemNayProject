@@ -68,8 +68,8 @@ def build_structured_legal_prompt(
     """Construct prompt instructing the LLM to return structured JSON."""
 
     doc_blocks = []
-    # Reduced from 5 to 3 chunks to fit within 2048 token context window
-    for idx, doc in enumerate(documents[:3], 1):
+    # 4 chunks for good context and speed balance
+    for idx, doc in enumerate(documents[:4], 1):
         document = getattr(doc, "document", None)
         title = getattr(document, "title", "") or "Không rõ tên văn bản"
         code = getattr(document, "code", "") or "N/A"
@@ -77,7 +77,7 @@ def build_structured_legal_prompt(
         section_title = getattr(doc, "section_title", "") or ""
         page_range = _format_page_range(doc)
         content = getattr(doc, "content", "") or ""
-        # Reduced snippet from 800 to 500 chars to fit context window
+        # Increased snippet to 500 chars to use more RAM and provide better context
         snippet = (content[:500] + "...") if len(content) > 500 else content
 
         block = textwrap.dedent(
@@ -95,8 +95,8 @@ def build_structured_legal_prompt(
     docs_text = "\n\n".join(doc_blocks)
     reference_lines = []
     title_section_pairs = []
-    # Reduced from 5 to 3 chunks to match doc_blocks
-    for doc in documents[:3]:
+    # 4 chunks to match doc_blocks for balance
+    for doc in documents[:4]:
         document = getattr(doc, "document", None)
         title = getattr(document, "title", "") or "Không rõ tên văn bản"
         section_code = getattr(doc, "section_code", "") or "Không rõ điều"
