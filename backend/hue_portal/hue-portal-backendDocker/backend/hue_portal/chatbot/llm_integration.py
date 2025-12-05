@@ -464,9 +464,10 @@ class LLMGenerator:
             logger.error("Unable to resolve GGUF model path for llama.cpp")
             return
         
-        n_ctx = int(os.environ.get("LLAMA_CPP_CONTEXT", "8192"))
+        # RAM optimization: Increased n_ctx to 16384 and n_batch to 2048 for better performance
+        n_ctx = int(os.environ.get("LLAMA_CPP_CONTEXT", "16384"))
         n_threads = int(os.environ.get("LLAMA_CPP_THREADS", str(max(1, os.cpu_count() or 2))))
-        n_batch = int(os.environ.get("LLAMA_CPP_BATCH", "512"))
+        n_batch = int(os.environ.get("LLAMA_CPP_BATCH", "2048"))
         n_gpu_layers = int(os.environ.get("LLAMA_CPP_GPU_LAYERS", "0"))
         use_mmap = os.environ.get("LLAMA_CPP_USE_MMAP", "true").lower() == "true"
         use_mlock = os.environ.get("LLAMA_CPP_USE_MLOCK", "true").lower() == "true"
@@ -519,6 +520,7 @@ class LLMGenerator:
         """Resolve GGUF model path, downloading from Hugging Face if needed."""
         potential_path = Path(configured_path)
         if potential_path.is_file():
+            logger.info(f"[LLM] Using existing model file: {potential_path}")
             return str(potential_path)
         
         repo_id = os.environ.get(
@@ -532,6 +534,13 @@ class LLMGenerator:
         cache_dir = Path(os.environ.get("LLAMA_CPP_CACHE_DIR", BASE_DIR / "models"))
         cache_dir.mkdir(parents=True, exist_ok=True)
         
+        # Check if file already exists in cache_dir (avoid re-downloading)
+        cached_file = cache_dir / filename
+        if cached_file.is_file():
+            logger.info(f"[LLM] Using cached model file: {cached_file}")
+            print(f"[LLM] ✅ Found cached model: {cached_file}", flush=True)
+            return str(cached_file)
+        
         try:
             from huggingface_hub import hf_hub_download
         except ImportError:
@@ -540,12 +549,18 @@ class LLMGenerator:
             return None
         
         try:
+            print(f"[LLM] Downloading model from Hugging Face: {repo_id}/{filename}", flush=True)
+            logger.info(f"[LLM] Downloading model from Hugging Face: {repo_id}/{filename}")
+            # hf_hub_download has built-in caching - won't re-download if file exists in HF cache
             downloaded_path = hf_hub_download(
                 repo_id=repo_id,
                 filename=filename,
                 local_dir=str(cache_dir),
                 local_dir_use_symlinks=False,
+                # Force download only if file doesn't exist (hf_hub_download checks cache automatically)
             )
+            print(f"[LLM] ✅ Model downloaded/cached: {downloaded_path}", flush=True)
+            logger.info(f"[LLM] ✅ Model downloaded/cached: {downloaded_path}")
             return downloaded_path
         except Exception as exc:
             error_trace = traceback.format_exc()
@@ -613,8 +628,8 @@ class LLMGenerator:
         
         if documents:
             prompt_parts.append("Các văn bản/quy định liên quan:")
-            # Reduced from 5 to 3 chunks to fit within 2048 token context window
-            for i, doc in enumerate(documents[:3], 1):
+            # 4 chunks for good context and speed balance
+            for i, doc in enumerate(documents[:4], 1):
                 # Extract relevant fields based on document type
                 doc_text = self._format_document(doc)
                 prompt_parts.append(f"{i}. {doc_text}")
@@ -711,6 +726,402 @@ class LLMGenerator:
             )
             traceback.print_exc(file=sys.stderr)
             return None
+    
+    def suggest_clarification_topics(
+        self,
+        query: str,
+        candidates: List[Dict[str, Any]],
+        max_options: int = 3,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Ask the LLM to propose clarification options based on candidate documents.
+        """
+        if not candidates or not self.is_available():
+            return None
+        
+        candidate_lines = []
+        for idx, candidate in enumerate(candidates[: max_options + 2], 1):
+            title = candidate.get("title") or candidate.get("code") or "Văn bản"
+            summary = candidate.get("summary") or candidate.get("section_title") or ""
+            doc_type = candidate.get("doc_type") or ""
+            candidate_lines.append(
+                f"{idx}. {candidate.get('code', '').upper()} – {title}\n"
+                f"   Loại: {doc_type or 'không rõ'}; Tóm tắt: {summary[:200] or 'Không có'}"
+            )
+        
+        prompt = (
+            "Bạn là trợ lý pháp luật. Người dùng vừa hỏi:\n"
+            f"\"{query.strip()}\"\n\n"
+            "Đây là các văn bản ứng viên có thể liên quan:\n"
+            f"{os.linesep.join(candidate_lines)}\n\n"
+            "Hãy chọn tối đa {max_options} văn bản quan trọng cần người dùng xác nhận để tôi tra cứu chính xác.\n"
+            "Yêu cầu trả về JSON với dạng:\n"
+            "{\n"
+            '  "message": "Câu nhắc người dùng bằng tiếng Việt",\n'
+            '  "options": [\n'
+            '    {"code": "MÃ VĂN BẢN", "title": "Tên văn bản", "reason": "Lý do gợi ý"},\n'
+            "    ...\n"
+            "  ]\n"
+            "}\n"
+            "Chỉ in JSON, không thêm lời giải thích khác."
+        ).format(max_options=max_options)
+        
+        raw = self._generate_from_prompt(prompt)
+        if not raw:
+            return None
+        
+        parsed = self._extract_json_payload(raw)
+        if not parsed:
+            return None
+        
+        options = parsed.get("options") or []
+        sanitized_options = []
+        for option in options:
+            code = (option.get("code") or "").strip()
+            title = (option.get("title") or "").strip()
+            if not code or not title:
+                continue
+            sanitized_options.append(
+                {
+                    "code": code.upper(),
+                    "title": title,
+                    "reason": (option.get("reason") or "").strip(),
+                }
+            )
+            if len(sanitized_options) >= max_options:
+                break
+        
+        if not sanitized_options:
+            return None
+        
+        message = (parsed.get("message") or "Tôi cần bạn chọn văn bản muốn tra cứu chi tiết hơn.").strip()
+        return {"message": message, "options": sanitized_options}
+    
+    def suggest_topic_options(
+        self,
+        query: str,
+        document_code: str,
+        document_title: str,
+        search_results: List[Dict[str, Any]],
+        conversation_context: Optional[List[Dict[str, str]]] = None,
+        max_options: int = 3,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Ask the LLM to propose topic/section options within a selected document.
+        
+        Args:
+            query: Original user query
+            document_code: Selected document code
+            document_title: Selected document title
+            search_results: Pre-searched sections from the document
+            conversation_context: Recent conversation history
+            max_options: Maximum number of options to return
+        
+        Returns:
+            Dict with message, options, and search_keywords
+        """
+        if not self.is_available():
+            return None
+        
+        # Build context summary
+        context_summary = ""
+        if conversation_context:
+            recent_messages = conversation_context[-3:]  # Last 3 messages
+            context_summary = "\n".join([
+                f"{msg.get('role', 'user')}: {msg.get('content', '')[:100]}"
+                for msg in recent_messages
+            ])
+        
+        # Format search results as candidates
+        candidate_lines = []
+        for idx, result in enumerate(search_results[:max_options + 2], 1):
+            section_title = result.get("section_title") or result.get("title") or ""
+            article = result.get("article") or result.get("article_number") or ""
+            excerpt = result.get("excerpt") or result.get("body") or ""
+            if excerpt:
+                excerpt = excerpt[:150] + "..." if len(excerpt) > 150 else excerpt
+            
+            candidate_lines.append(
+                f"{idx}. {section_title or article or 'Điều khoản'}\n"
+                f"   {'Điều: ' + article if article else ''}\n"
+                f"   Nội dung: {excerpt[:200] or 'Không có'}"
+            )
+        
+        prompt = (
+            "Bạn là trợ lý pháp luật. Người dùng đã chọn văn bản:\n"
+            f"- Mã: {document_code}\n"
+            f"- Tên: {document_title}\n\n"
+            f"Câu hỏi ban đầu của người dùng: \"{query.strip()}\"\n\n"
+        )
+        
+        if context_summary:
+            prompt += (
+                f"Lịch sử hội thoại gần đây:\n{context_summary}\n\n"
+            )
+        
+        prompt += (
+            "Đây là các điều khoản/chủ đề trong văn bản có thể liên quan:\n"
+            f"{os.linesep.join(candidate_lines)}\n\n"
+            f"Hãy chọn tối đa {max_options} chủ đề/điều khoản quan trọng nhất cần người dùng xác nhận.\n"
+            "Yêu cầu trả về JSON với dạng:\n"
+            "{\n"
+            '  "message": "Câu nhắc người dùng bằng tiếng Việt",\n'
+            '  "options": [\n'
+            '    {"title": "Tên chủ đề/điều khoản", "article": "Điều X", "reason": "Lý do gợi ý", "keywords": ["từ", "khóa", "tìm", "kiếm"]},\n'
+            "    ...\n"
+            "  ],\n"
+            '  "search_keywords": ["từ", "khóa", "chính", "để", "tìm", "kiếm"]\n'
+            "}\n"
+            "Trong đó:\n"
+            "- options: Danh sách chủ đề/điều khoản để người dùng chọn\n"
+            "- search_keywords: Danh sách từ khóa quan trọng để tìm kiếm thông tin liên quan\n"
+            "- Mỗi option nên có keywords riêng để tìm kiếm chính xác hơn\n"
+            "Chỉ in JSON, không thêm lời giải thích khác."
+        )
+        
+        raw = self._generate_from_prompt(prompt)
+        if not raw:
+            return None
+        
+        parsed = self._extract_json_payload(raw)
+        if not parsed:
+            return None
+        
+        options = parsed.get("options") or []
+        sanitized_options = []
+        for option in options:
+            title = (option.get("title") or "").strip()
+            if not title:
+                continue
+            
+            sanitized_options.append({
+                "title": title,
+                "article": (option.get("article") or "").strip(),
+                "reason": (option.get("reason") or "").strip(),
+                "keywords": option.get("keywords") or [],
+            })
+            if len(sanitized_options) >= max_options:
+                break
+        
+        if not sanitized_options:
+            return None
+        
+        message = (parsed.get("message") or f"Bạn muốn tìm điều khoản/chủ đề nào cụ thể trong {document_title}?").strip()
+        search_keywords = parsed.get("search_keywords") or []
+        
+        return {
+            "message": message,
+            "options": sanitized_options,
+            "search_keywords": search_keywords,
+        }
+    
+    def suggest_detail_options(
+        self,
+        query: str,
+        selected_document_code: str,
+        selected_topic: str,
+        conversation_context: Optional[List[Dict[str, str]]] = None,
+        max_options: int = 3,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Ask the LLM to propose detail options for further clarification.
+        
+        Args:
+            query: Original user query
+            selected_document_code: Selected document code
+            selected_topic: Selected topic/section
+            conversation_context: Recent conversation history
+            max_options: Maximum number of options to return
+        
+        Returns:
+            Dict with message, options, and search_keywords
+        """
+        if not self.is_available():
+            return None
+        
+        # Build context summary
+        context_summary = ""
+        if conversation_context:
+            recent_messages = conversation_context[-5:]  # Last 5 messages
+            context_summary = "\n".join([
+                f"{msg.get('role', 'user')}: {msg.get('content', '')[:100]}"
+                for msg in recent_messages
+            ])
+        
+        prompt = (
+            "Bạn là trợ lý pháp luật. Người dùng đã:\n"
+            f"1. Chọn văn bản: {selected_document_code}\n"
+            f"2. Chọn chủ đề: {selected_topic}\n\n"
+            f"Câu hỏi ban đầu: \"{query.strip()}\"\n\n"
+        )
+        
+        if context_summary:
+            prompt += (
+                f"Lịch sử hội thoại:\n{context_summary}\n\n"
+            )
+        
+        prompt += (
+            "Người dùng muốn biết thêm chi tiết về chủ đề này.\n"
+            f"Hãy đề xuất tối đa {max_options} khía cạnh/chi tiết cụ thể mà người dùng có thể muốn biết.\n"
+            "Yêu cầu trả về JSON với dạng:\n"
+            "{\n"
+            '  "message": "Câu hỏi xác nhận bằng tiếng Việt",\n'
+            '  "options": [\n'
+            '    {"title": "Khía cạnh/chi tiết", "reason": "Lý do gợi ý", "keywords": ["từ", "khóa"]},\n'
+            "    ...\n"
+            "  ],\n"
+            '  "search_keywords": ["từ", "khóa", "tìm", "kiếm"]\n'
+            "}\n"
+            "Chỉ in JSON, không thêm lời giải thích khác."
+        )
+        
+        raw = self._generate_from_prompt(prompt)
+        if not raw:
+            return None
+        
+        parsed = self._extract_json_payload(raw)
+        if not parsed:
+            return None
+        
+        options = parsed.get("options") or []
+        sanitized_options = []
+        for option in options:
+            title = (option.get("title") or "").strip()
+            if not title:
+                continue
+            
+            sanitized_options.append({
+                "title": title,
+                "reason": (option.get("reason") or "").strip(),
+                "keywords": option.get("keywords") or [],
+            })
+            if len(sanitized_options) >= max_options:
+                break
+        
+        if not sanitized_options:
+            return None
+        
+        message = (parsed.get("message") or "Bạn muốn chi tiết gì cho chủ đề này nữa không?").strip()
+        search_keywords = parsed.get("search_keywords") or []
+        
+        return {
+            "message": message,
+            "options": sanitized_options,
+            "search_keywords": search_keywords,
+        }
+    
+    def extract_search_keywords(
+        self,
+        query: str,
+        selected_options: Optional[List[Dict[str, Any]]] = None,
+        conversation_context: Optional[List[Dict[str, str]]] = None,
+    ) -> List[str]:
+        """
+        Intelligently extract search keywords from query, selected options, and context.
+        
+        Args:
+            query: Original user query
+            selected_options: List of selected options (document, topic, etc.)
+            conversation_context: Recent conversation history
+        
+        Returns:
+            List of extracted keywords for search optimization
+        """
+        if not self.is_available():
+            # Fallback to simple keyword extraction
+            return self._fallback_keyword_extraction(query)
+        
+        # Build context
+        context_text = query
+        if selected_options:
+            for opt in selected_options:
+                title = opt.get("title") or opt.get("code") or ""
+                reason = opt.get("reason") or ""
+                keywords = opt.get("keywords") or []
+                if title:
+                    context_text += f" {title}"
+                if reason:
+                    context_text += f" {reason}"
+                if keywords:
+                    context_text += f" {' '.join(keywords)}"
+        
+        if conversation_context:
+            recent_user_messages = [
+                msg.get("content", "")
+                for msg in conversation_context[-3:]
+                if msg.get("role") == "user"
+            ]
+            context_text += " " + " ".join(recent_user_messages)
+        
+        prompt = (
+            "Bạn là trợ lý pháp luật. Tôi cần bạn trích xuất các từ khóa quan trọng để tìm kiếm thông tin.\n\n"
+            f"Ngữ cảnh: {context_text[:500]}\n\n"
+            "Hãy trích xuất 5-10 từ khóa quan trọng nhất (tiếng Việt) để tìm kiếm.\n"
+            "Yêu cầu trả về JSON với dạng:\n"
+            "{\n"
+            '  "keywords": ["từ", "khóa", "quan", "trọng"]\n'
+            "}\n"
+            "Chỉ in JSON, không thêm lời giải thích khác."
+        )
+        
+        raw = self._generate_from_prompt(prompt)
+        if not raw:
+            return self._fallback_keyword_extraction(query)
+        
+        parsed = self._extract_json_payload(raw)
+        if not parsed:
+            return self._fallback_keyword_extraction(query)
+        
+        keywords = parsed.get("keywords") or []
+        if isinstance(keywords, list) and len(keywords) > 0:
+            # Filter out stopwords and short words
+            filtered_keywords = [
+                kw.strip().lower()
+                for kw in keywords
+                if kw and len(kw.strip()) > 2
+            ]
+            return filtered_keywords[:10]  # Limit to 10 keywords
+        
+        return self._fallback_keyword_extraction(query)
+    
+    def _fallback_keyword_extraction(self, query: str) -> List[str]:
+        """Fallback keyword extraction using simple rule-based method."""
+        # Simple Vietnamese stopwords
+        stopwords = {
+            "và", "của", "cho", "với", "trong", "là", "có", "được", "bị", "sẽ",
+            "thì", "mà", "này", "đó", "nào", "gì", "như", "về", "từ", "đến",
+            "các", "những", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám",
+            "chín", "mười", "nhiều", "ít", "rất", "quá", "cũng", "đã", "sẽ",
+        }
+        
+        words = query.lower().split()
+        keywords = [
+            w.strip()
+            for w in words
+            if w.strip() not in stopwords and len(w.strip()) > 2
+        ]
+        return keywords[:10]
+    
+    def _extract_json_payload(self, raw: str) -> Optional[Dict[str, Any]]:
+        """Best-effort extraction of JSON object from raw LLM text."""
+        if not raw:
+            return None
+        raw = raw.strip()
+        for snippet in (raw, self._slice_to_json(raw)):
+            if not snippet:
+                continue
+            try:
+                return json.loads(snippet)
+            except Exception:
+                continue
+        return None
+    
+    def _slice_to_json(self, text: str) -> Optional[str]:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            return None
+        return text[start : end + 1]
     
     def generate_structured_legal_answer(
         self,
@@ -1063,7 +1474,8 @@ class LLMGenerator:
         try:
             temperature = float(os.environ.get("LLAMA_CPP_TEMPERATURE", "0.35"))
             top_p = float(os.environ.get("LLAMA_CPP_TOP_P", "0.85"))
-            max_tokens = int(os.environ.get("LLAMA_CPP_MAX_TOKENS", "512"))
+            # Reduced max_tokens for faster inference on CPU (HF Space free tier)
+            max_tokens = int(os.environ.get("LLAMA_CPP_MAX_TOKENS", "256"))
             repeat_penalty = float(os.environ.get("LLAMA_CPP_REPEAT_PENALTY", "1.1"))
             system_prompt = os.environ.get(
                 "LLAMA_CPP_SYSTEM_PROMPT",
