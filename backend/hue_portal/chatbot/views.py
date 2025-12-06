@@ -64,6 +64,23 @@ def _apply_selected_topic(session_id: Optional[str], topic: Optional[str]) -> No
     )
 
 
+def _apply_selected_detail(session_id: Optional[str], detail: Optional[str]) -> None:
+    """Persist or clear the selected detail for a session."""
+    if not session_id:
+        return
+    if not detail:
+        ConversationContext.clear_session_metadata_keys(session_id, ["selected_detail"])
+        return
+    normalized = str(detail).strip()
+    if not normalized:
+        ConversationContext.clear_session_metadata_keys(session_id, ["selected_detail"])
+        return
+    ConversationContext.update_session_metadata(
+        session_id,
+        {"selected_detail": normalized},
+    )
+
+
 @csrf_exempt
 def chat_simple(request: HttpRequest) -> JsonResponse:
     """
@@ -188,6 +205,12 @@ def chat(request: Request) -> Response:
         selected_topic = selected_topic.strip()
     else:
         selected_topic = None
+    
+    selected_detail = request.data.get("selected_detail") or request.data.get("detail_option")
+    if isinstance(selected_detail, str):
+        selected_detail = selected_detail.strip()
+    else:
+        selected_detail = None
     
     # Log received message for debugging
     message_preview = message[:100] + "..." if len(message) > 100 else message
