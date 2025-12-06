@@ -228,9 +228,35 @@ def chat(request: Request) -> Response:
         chatbot = get_chatbot()
         response = chatbot.generate_response(message, session_id=session_id)
         
+        # Validate response - ensure it's a dict with required fields
+        if not response or not isinstance(response, dict):
+            logger.error("[CHAT] ❌ Invalid response from chatbot.generate_response: %s", type(response))
+            response = {
+                "message": "Xin lỗi, có lỗi xảy ra khi xử lý câu hỏi của bạn. Vui lòng thử lại.",
+                "intent": "error",
+                "results": [],
+                "count": 0,
+                "session_id": session_id,
+            }
+        
+        # Ensure required fields exist
+        if "message" not in response and "clarification" not in response:
+            logger.warning("[CHAT] ⚠️ Response missing 'message' field, adding default")
+            response["message"] = "Xin lỗi, không thể tìm thấy thông tin."
+        
         # Ensure session_id is in response
         if "session_id" not in response:
             response["session_id"] = session_id
+        
+        # Ensure intent exists
+        if "intent" not in response:
+            response["intent"] = "unknown"
+        
+        # Ensure results and count exist
+        if "results" not in response:
+            response["results"] = []
+        if "count" not in response:
+            response["count"] = len(response.get("results", []))
         
         # Enhanced logging for search_legal queries
         intent = response.get("intent", "unknown")

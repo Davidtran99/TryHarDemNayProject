@@ -465,9 +465,10 @@ class LLMGenerator:
             return
         
         # CPU-friendly defaults: smaller context/batch to reduce latency/RAM
-        n_ctx = int(os.environ.get("LLAMA_CPP_CONTEXT", "8192"))
-        n_threads = int(os.environ.get("LLAMA_CPP_THREADS", "4"))
-        n_batch = int(os.environ.get("LLAMA_CPP_BATCH", "1024"))
+        # Tăng threads để tăng tốc độ trên CPU (HF Spaces có nhiều cores)
+        n_ctx = int(os.environ.get("LLAMA_CPP_CONTEXT", "4096"))  # Giảm context để nhanh hơn
+        n_threads = int(os.environ.get("LLAMA_CPP_THREADS", "8"))  # Tăng từ 4 lên 8 threads
+        n_batch = int(os.environ.get("LLAMA_CPP_BATCH", "512"))  # Giảm batch để giảm RAM
         n_gpu_layers = int(os.environ.get("LLAMA_CPP_GPU_LAYERS", "0"))
         use_mmap = os.environ.get("LLAMA_CPP_USE_MMAP", "true").lower() == "true"
         use_mlock = os.environ.get("LLAMA_CPP_USE_MLOCK", "true").lower() == "true"
@@ -859,24 +860,11 @@ class LLMGenerator:
                 f"Lịch sử hội thoại gần đây:\n{context_summary}\n\n"
             )
         
+        # Tối ưu prompt: rút gọn để giảm tokens và tăng tốc độ
         prompt += (
-            "Đây là các điều khoản/chủ đề trong văn bản có thể liên quan:\n"
-            f"{os.linesep.join(candidate_lines)}\n\n"
-            f"Hãy chọn tối đa {max_options} chủ đề/điều khoản quan trọng nhất cần người dùng xác nhận.\n"
-            "Yêu cầu trả về JSON với dạng:\n"
-            "{\n"
-            '  "message": "Câu nhắc người dùng bằng tiếng Việt",\n'
-            '  "options": [\n'
-            '    {"title": "Tên chủ đề/điều khoản", "article": "Điều X", "reason": "Lý do gợi ý", "keywords": ["từ", "khóa", "tìm", "kiếm"]},\n'
-            "    ...\n"
-            "  ],\n"
-            '  "search_keywords": ["từ", "khóa", "chính", "để", "tìm", "kiếm"]\n'
-            "}\n"
-            "Trong đó:\n"
-            "- options: Danh sách chủ đề/điều khoản để người dùng chọn\n"
-            "- search_keywords: Danh sách từ khóa quan trọng để tìm kiếm thông tin liên quan\n"
-            "- Mỗi option nên có keywords riêng để tìm kiếm chính xác hơn\n"
-            "Chỉ in JSON, không thêm lời giải thích khác."
+            f"Các điều khoản liên quan:\n{os.linesep.join(candidate_lines[:5])}\n\n"
+            f"Chọn {max_options} chủ đề quan trọng nhất. JSON:\n"
+            "{\"message\": \"Câu nhắc\", \"options\": [{\"title\": \"...\", \"article\": \"...\", \"reason\": \"...\", \"keywords\": [...]}], \"search_keywords\": [...]}"
         )
         
         raw = self._generate_from_prompt(prompt)
@@ -1053,15 +1041,11 @@ class LLMGenerator:
             ]
             context_text += " " + " ".join(recent_user_messages)
         
+        # Tối ưu prompt: ngắn gọn hơn để giảm tokens và tăng tốc độ
         prompt = (
-            "Bạn là trợ lý pháp luật. Tôi cần bạn trích xuất các từ khóa quan trọng để tìm kiếm thông tin.\n\n"
-            f"Ngữ cảnh: {context_text[:500]}\n\n"
-            "Hãy trích xuất 5-10 từ khóa quan trọng nhất (tiếng Việt) để tìm kiếm.\n"
-            "Yêu cầu trả về JSON với dạng:\n"
-            "{\n"
-            '  "keywords": ["từ", "khóa", "quan", "trọng"]\n'
-            "}\n"
-            "Chỉ in JSON, không thêm lời giải thích khác."
+            "Trích xuất 5-8 từ khóa quan trọng từ:\n"
+            f"{context_text[:300]}\n\n"
+            "JSON: {\"keywords\": [\"từ\", \"khóa\"]}"
         )
         
         raw = self._generate_from_prompt(prompt)

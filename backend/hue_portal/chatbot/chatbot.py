@@ -111,12 +111,32 @@ class Chatbot(CoreChatbot):
             intent = route_decision.forced_intent
 
         # Nếu session đã có selected_document_code (user đã chọn văn bản ở wizard)
-        # thì luôn ép intent về search_legal và route sang SEARCH,
-        # tránh bị kẹt ở nhánh small-talk/off-topic do nội dung câu hỏi ban đầu.
-        if selected_doc_code:
-            intent = "search_legal"
-            route_decision.route = IntentRoute.SEARCH
-            route_decision.forced_intent = "search_legal"
+        # thì ép intent về search_legal CHỈ KHI query không phải greeting/small_talk
+        # Tránh ép greeting thành search_legal (gây chậm và sai logic)
+        if selected_doc_code and route_decision.route != IntentRoute.GREETING:
+            # Chỉ ép intent nếu không phải greeting đơn giản
+            query_lower = query.lower().strip()
+            is_simple_greeting = (
+                len(query_lower.split()) <= 3 and
+                any(greeting in query_lower for greeting in ["xin chào", "xin chao", "chào", "chao", "hello", "hi", "hey"]) and
+                not any(kw in query_lower for kw in ["phạt", "mức phạt", "vi phạm", "thủ tục", "hồ sơ", "địa chỉ", "công an", "cảnh báo", "kỷ luật", "đảng"])
+            )
+            if not is_simple_greeting:
+                intent = "search_legal"
+                route_decision.route = IntentRoute.SEARCH
+                route_decision.forced_intent = "search_legal"
+            else:
+                # Reset selected_doc_code nếu user gửi greeting mới
+                if session_id:
+                    try:
+                        ConversationContext.update_session_metadata(
+                            session_id,
+                            {"selected_document_code": None, "selected_topic": None, "wizard_stage": None}
+                        )
+                        selected_doc_code = None
+                        logger.info("[WIZARD] Reset selected_doc_code for new greeting")
+                    except Exception:
+                        pass
 
         # Map tất cả intent tra cứu nội dung về search_legal
         domain_search_intents = {
@@ -217,19 +237,31 @@ class Chatbot(CoreChatbot):
         if intent == "search_legal" and not selected_doc_code and not has_doc_code_in_query:
             print("[WIZARD] ✅ Stage 1: Using direct semantic search from slow_path_handler")
             # Delegate to slow_path_handler which uses direct semantic search (no query rewrite)
-            slow_handler = SlowPathHandler()
-            response = slow_handler.handle(
-                query=query,
-                intent=intent,
-                session_id=session_id,
-                selected_document_code=None,  # No document selected yet
-            )
+            try:
+                slow_handler = SlowPathHandler()
+                response = slow_handler.handle(
+                    query=query,
+                    intent=intent,
+                    session_id=session_id,
+                    selected_document_code=None,  # No document selected yet
+                )
+            except Exception as e:
+                logger.error("[WIZARD] Error in slow_path_handler: %s", e, exc_info=True)
+                print(f"⚠️ [WIZARD] Error in slow_path_handler: {e}")
+                response = None
             
-            # Ensure response has wizard metadata
-            if response:
+            # Ensure response has wizard metadata and required fields
+            if response and isinstance(response, dict):
+                # Ensure message field exists
+                if not response.get("message") and not response.get("clarification"):
+                    response["message"] = "Tôi đã tìm thấy các văn bản pháp luật liên quan. Bạn hãy chọn văn bản muốn tra cứu:"
+                
                 response.setdefault("wizard_stage", "choose_document")
                 response.setdefault("routing", "legal_wizard")
                 response.setdefault("type", "options")
+                response.setdefault("intent", intent)
+                response.setdefault("results", [])
+                response.setdefault("count", 0)
                 
                 # Update session metadata
                 if session_id:
@@ -248,20 +280,48 @@ class Chatbot(CoreChatbot):
                 if session_id:
                     try:
                         bot_message = response.get("message") or response.get("clarification", {}).get("message", "")
-                        ConversationContext.add_message(
-                            session_id=session_id,
-                            role="bot",
-                            content=bot_message,
-                            intent=intent,
-                        )
+                        if bot_message:
+                            ConversationContext.add_message(
+                                session_id=session_id,
+                                role="bot",
+                                content=bot_message,
+                                intent=intent,
+                            )
                     except Exception as e:
                         print(f"⚠️ Failed to save wizard bot message: {e}")
+                
+                return response
             
-            return response if response else {
-                "message": "Xin lỗi, có lỗi xảy ra khi tìm kiếm văn bản.",
+            # Fallback response if slow_handler failed or returned invalid response
+            logger.warning("[WIZARD] slow_path_handler returned invalid response, using fallback")
+            return {
+                "message": "Tôi đã tìm thấy các văn bản pháp luật liên quan. Bạn hãy chọn văn bản muốn tra cứu:",
                 "intent": intent,
                 "results": [],
                 "count": 0,
+                "type": "options",
+                "wizard_stage": "choose_document",
+                "routing": "legal_wizard",
+                "clarification": {
+                    "message": "Tôi đã tìm thấy các văn bản pháp luật liên quan. Bạn hãy chọn văn bản muốn tra cứu:",
+                    "options": [
+                        {
+                            "code": "264-QD-TW",
+                            "title": "Quyết định 264-QĐ/TW về kỷ luật đảng viên",
+                            "reason": "Quy định chung về xử lý kỷ luật đối với đảng viên vi phạm.",
+                        },
+                        {
+                            "code": "QD-69-TW",
+                            "title": "Quy định 69-QĐ/TW về kỷ luật tổ chức đảng, đảng viên",
+                            "reason": "Quy định chi tiết về các hành vi vi phạm và hình thức kỷ luật.",
+                        },
+                        {
+                            "code": "TT-02-CAND",
+                            "title": "Thông tư 02/2021/TT-BCA về điều lệnh CAND",
+                            "reason": "Quy định về điều lệnh, lễ tiết, tác phong trong CAND.",
+                        },
+                    ],
+                },
             }
         
         # Stage 2: Choose topic/section (if document selected but no topic yet)
