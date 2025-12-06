@@ -191,6 +191,7 @@ class Chatbot(CoreChatbot):
         has_doc_code_in_query = self._query_has_document_code(query)
         wizard_stage = session_metadata.get("wizard_stage") if session_metadata else None
         selected_topic = session_metadata.get("selected_topic") if session_metadata else None
+        selected_detail = session_metadata.get("selected_detail") if session_metadata else None
         wizard_depth = session_metadata.get("wizard_depth", 0) if session_metadata else 0
         
         print(f"[WIZARD] Chatbot layer check - intent={intent}, wizard_stage={wizard_stage}, selected_doc_code={selected_doc_code}, selected_topic={selected_topic}, has_doc_code_in_query={has_doc_code_in_query}, query='{query[:50]}'")
@@ -501,7 +502,8 @@ class Chatbot(CoreChatbot):
         
         # Stage 3: Choose detail (if topic selected, ask if user wants more details)
         # Skip if wizard_stage is already "answer" (user wants final answer)
-        if intent == "search_legal" and selected_doc_code and selected_topic and wizard_stage != "answer":
+        # Also skip if detail already selected (user is asking final question)
+        if intent == "search_legal" and selected_doc_code and selected_topic and not selected_detail and wizard_stage != "answer":
             # Check if user is asking for more details or saying "Không"
             query_lower = query.lower()
             wants_more = any(kw in query_lower for kw in ["có", "cần", "muốn", "thêm", "chi tiết", "nữa"])
@@ -878,10 +880,33 @@ class Chatbot(CoreChatbot):
         """Execute Slow Path legal handler (with fast-path + structured output)."""
         slow_handler = SlowPathHandler()
         selected_doc_code = None
+        selected_topic = None
+        selected_detail = None
         if session_metadata:
             selected_doc_code = session_metadata.get("selected_document_code")
+            selected_topic = session_metadata.get("selected_topic")
+            selected_detail = session_metadata.get("selected_detail")
+        
+        # If we have selected topic/detail, enhance query with context
+        enhanced_query = query
+        if selected_topic or selected_detail:
+            context_parts = []
+            if selected_topic:
+                context_parts.append(selected_topic)
+            if selected_detail:
+                context_parts.append(selected_detail)
+            # Combine original query with context for better search
+            enhanced_query = f"{query} {' '.join(context_parts)}"
+            logger.info(
+                "[WIZARD] Enhanced query with context - original='%s', enhanced='%s', topic=%s, detail=%s",
+                query,
+                enhanced_query,
+                selected_topic,
+                selected_detail,
+            )
+        
         response = slow_handler.handle(
-            query,
+            enhanced_query,  # Use enhanced query with context
             intent,
             session_id,
             selected_document_code=selected_doc_code,
