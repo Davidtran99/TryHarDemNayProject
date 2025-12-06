@@ -1357,4 +1357,3 @@ class SlowPathHandler:
         lines.append(f"\nNguồn: {section_label}, {citation_doc}.")
         return "\n".join(lines)
 
-test
