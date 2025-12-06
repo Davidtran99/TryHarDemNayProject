@@ -132,6 +132,9 @@ def chat_simple(request: HttpRequest) -> JsonResponse:
     
     if selected_topic is not None:
         _apply_selected_topic(session_id, selected_topic)
+    
+    if selected_detail is not None:
+        _apply_selected_detail(session_id, selected_detail)
 
     try:
         chatbot = get_chatbot()
