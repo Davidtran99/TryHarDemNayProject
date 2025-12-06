@@ -30,6 +30,7 @@ from hue_portal.chatbot.context_manager import ConversationContext
 from hue_portal.chatbot.router import DOCUMENT_CODE_PATTERNS
 from hue_portal.core.query_rewriter import get_query_rewriter
 from hue_portal.core.pure_semantic_search import pure_semantic_search, parallel_vector_search
+from hue_portal.core.redis_cache import get_redis_cache
 
 logger = logging.getLogger(__name__)
 
